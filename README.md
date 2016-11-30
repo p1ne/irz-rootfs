@@ -2,15 +2,21 @@
 Changes to root filesystem of IRZ RUH2b router
 
 В данном репозитории лежат изменения rootfs к промышленному 3G роутеру IRZ RUH2b. Цель изменений - добавить в роутер поддержку WiFi
+
 Прошивка, взятая за основу, лежит тут: http://www.radiofid.ru/upload/files/routers/irz_ruh/RUH2b.master.update.2014-10-28_17-17-43.bin
+
 Использовалась информация из BitBucket-репозитория компании Радиофид: https://bitbucket.org/radiofid/
+
 тулчейн: https://bitbucket.org/radiofid/irz-rxx-toolchain
+
 ядро 4.4: https://bitbucket.org/radiofid/linux-radiofid/branch/irz-4.4.x
+
 А также информация, полученная от технической поддержки Радиофид.
 
 Файлы конфигурации kernel, buildroot, инструкции по сборке и патчи к апстрим софту лежат в репозитории https://github.com/p1ne/irz-build-tools
 
 Готовые прошивки и описание процедуры прошивки в репозитории https://github.com/p1ne/irz-firmware
+
 *ВНИМАНИЕ* Поскольку у новой прошивки другое распределение разделов на flash-памяти, прошивка из Web-интерфейса успехом не увенчается. Шить надо через Serial-интерфейс по процедуре, описанной в репозитории
 
 Из ограничений которые сейчас есть в данной сборке
