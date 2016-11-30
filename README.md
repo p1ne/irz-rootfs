@@ -13,7 +13,7 @@ Changes to root filesystem of IRZ RUH2b router
 
 А также информация, полученная от технической поддержки Радиофид.
 
-Файлы конфигурации kernel, buildroot, инструкции по сборке и патчи к апстрим софту лежат в репозитории https://github.com/p1ne/irz-build-tools
+Файлы конфигурации kernel, buildroot, инструкции по сборке и патчи к апстрим софту лежат в репозитории https://github.com/p1ne/irz-devel
 
 Готовые прошивки и описание процедуры прошивки в репозитории https://github.com/p1ne/irz-firmware
 
