@@ -25,7 +25,7 @@ fw_setenv serial $SERIAL
 fw_setenv produced $PRODUCED
 fw_setenv ipaddr 192.168.1.1
 fw_setenv serverip 192.168.1.10
-fw_setenv bootargs root=/dev/mtdblock7 ro console=ttyS0,115200 mem=64M mtdparts=physmap-flash.0:16K\(boot\),32K\(settings\),8K\(hwinfo\),8K\(nv\),64K\(u-boot\),1408K\(kernel\),1536K\(rwfs\),5120K\(rootfs\)
+fw_setenv bootargs root=/dev/mtdblock7 ro console=ttyS0,115200 mem=64M mtdparts=physmap-flash.0:16K\(boot\),32K\(settings\),8K\(hwinfo\),8K\(nv\),64K\(u-boot\),2368K\(kernel\),576K\(rwfs\),5120K\(rootfs\)
 fw_setenv bootcmd bootm 10020000
 if [ "$?" = "0" ]; then
     echo "--- U-Boot Environment ---"
