@@ -1,0 +1,34 @@
+#!/bin/sh
+# Write connections log
+LOG=/mnt/rwfs/settings/connection.log
+LOG_SIZE=1000
+SIM=`sim get`
+[ -z "$1" ] && echo "No action specified!" && exit 1
+case "$1" in
+  dialing)
+    echo `date +"%F %H:%M:%S"`" Connecting to $2 (SIM$SIM)" >> $LOG
+  ;;
+  connected)
+    echo `date +"%F %H:%M:%S"`" Connected: Local IP: $2, Remote IP: $3" >> $LOG
+    echo `date +"%F %H:%M:%S"`" Connected: DNS1: $4, DNS2: $5" >> $LOG
+  ;;
+  disconnected)
+    DUR=`timeconv $2`
+    SNT=`byteconv $3`
+    RCV=`byteconv $4`
+    echo `date +'%F %H:%M:%S'`" Disconnected: Duration $DUR" >> $LOG
+    echo `date +'%F %H:%M:%S'`" Disconnected: Sent $SNT, Received $RCV" >> $LOG
+    echo "" >> $LOG
+  ;;
+  clear)
+    rm $LOG
+    exit 0
+  ;;
+  message)
+    [ -n "$2" ] && echo "`date +'%F %H:%M:%S'` $2" >> /mnt/rwfs/settings/connection.log
+  ;;
+  *)
+    echo "Usage: $0 (dialing APN|connected LOCAL_IP REMOTE_IP DNS1 DNS2|disconnected CONN_TIME BYTES_SENT BYTES_RCVD|clear)"
+    exit 1
+esac
+

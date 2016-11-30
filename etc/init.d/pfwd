@@ -1,0 +1,64 @@
+#!/bin/sh
+# Port forwarding configuration script
+[ -e /mnt/rwfs/settings/settings.nat ] && . /mnt/rwfs/settings/settings.nat
+
+start() {
+    echo -n "Starting port forwarding... "
+    for i in `seq 10`; do
+        eval IPADDR="$"NAT_PORT${i}_IPADDR
+        if [ -n "$IPADDR" ]; then
+            eval TYPE="$"NAT_PORT${i}_TYPE
+            eval PUBLIC="$"NAT_PORT${i}_PUBLIC
+            eval PRIVATE="$"NAT_PORT${i}_PRIVATE
+            case $TYPE in
+                tcp)
+                    iptables -t nat -A pfwd -p tcp --dport $PUBLIC -j DNAT --to-destination $IPADDR:$PRIVATE
+                    ;;  
+                udp)
+                    iptables -t nat -A pfwd -p udp --dport $PUBLIC -j DNAT --to-destination $IPADDR:$PRIVATE
+                    ;;  
+                icmp)
+                    iptables -t nat -A pfwd -p icmp -j DNAT --to-destination $IPADDR:$PRIVATE
+                    ;;  
+                tcpudp)
+                    iptables -t nat -A pfwd -p tcp --dport $PUBLIC -j DNAT --to-destination $IPADDR:$PRIVATE
+                    iptables -t nat -A pfwd -p udp --dport $PUBLIC -j DNAT --to-destination $IPADDR:$PRIVATE
+                    ;;
+                *)
+                    ;;
+            esac
+        fi  
+    done
+    if [ "$NAT_DEFAULT_ENABLED" = "1" ]; then
+         ## ipsec/vpn passthrough
+        /etc/init.d/ovpn_dmz restart
+        /etc/init.d/ipsec_dmz restart
+
+        iptables -t nat -A pfwd ! -i eth0 -j DNAT --to-destination $NAT_DEFAULT_IPADDR
+    fi
+    echo "done"
+}
+
+stop() {
+    echo -n "Stopping port forwarding... "
+    iptables -t nat -F pfwd
+    echo "done"
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    *)
+        echo "Usage: $0 (start|restart|stop)"
+        exit 1
+        ;;
+esac
+clear_conntrack &

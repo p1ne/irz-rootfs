@@ -1,0 +1,90 @@
+#!/bin/sh
+#       $1      the interface name used by pppd (e.g. ppp3)
+#       $2      the tty device name
+#       $3      the tty device speed
+#       $4      the local IP address for the interface
+#       $5      the remote IP address
+#       $6      the parameter specified by the 'ipparam' option to pppd
+# Variables:
+# DNS1          If the peer supplies DNS server addresses, this variable is set to the first DNS server address supplied.
+# DNS2          If the peer supplies DNS server addresses, this variable is set to the second DNS server address supplied.
+trap "logger -t ip-up 'SIGTERM IGNORED'" SIGTERM
+PID=/var/run/ppp_ip.pid
+echo $$ > $PID
+REMOTE_IP=$5
+IFACE=$1
+LOCAL_IP=$4
+USER=/mnt/rwfs/settings/ipup
+. /mnt/rwfs/settings/settings.ppp
+
+if [ "$IFACE" = "ppp0" ]; then
+    ## save connections log
+    DNSSTR=""
+    if [ "`sim get`" = "1" ]; then
+        USEDNS=$PPP_USEDNS
+        case "$USEDNS" in
+            usepeerdns) DNSSTR="$DNS1 $DNS2" ;;
+            useowndns)  DNSSTR="$PPP_DNS_SERVER $PPP_DNS_SECONDARY" ;;
+        esac
+    else
+        USEDNS=$PPP_USEDNS2
+        case "$USEDNS" in
+            usepeerdns) DNSSTR="$DNS1 $DNS2" ;;
+            useowndns)  DNSSTR="$PPP_DNS_SERVER2 $PPP_DNS_SECONDARY2" ;;
+        esac
+    fi
+    /etc/init.d/connection connected $LOCAL_IP $REMOTE_IP $DNSSTR
+    echo $REMOTE_IP > /var/ppp/remoteip
+    ## add default route if none
+    [ -f /tmp/reserve ] && iface=`cat /tmp/reserve`
+    def=`route -n|grep '^0.0.0.0'`
+    if [ -z "$def" ] && [ "$iface" != "eth" ]; then
+        route add default gw $REMOTE_IP
+    fi
+    ## Write DNS
+    if [ "$USEDNS" = "usepeerdns" ]; then
+        echo -n "" > /var/etc/resolv.conf.ppp
+        [ -n "$DNS1" ] && echo "nameserver $DNS1" >> /var/etc/resolv.conf.ppp
+        [ -n "$DNS2" ] && echo "nameserver $DNS2" >> /var/etc/resolv.conf.ppp
+    fi
+    chmod a+r /var/etc/resolv.conf.ppp
+    ## set resolv.conf to ppp if not in reserve mode
+    if [ ! -f /tmp/reserve ]; then
+        [ -f /var/etc/resolv.conf ] && rm /var/etc/resolv.conf
+        ln -s /var/etc/resolv.conf.ppp /var/etc/resolv.conf
+    fi
+    ## start services
+    /etc/init.d/ntp sync &
+    chmod a+r /var/run/ppp0.pid
+    echo $LOCAL_IP > /var/ppp/ip
+    echo $LOCAL_IP > /tmp/ip
+    chmod a+r /var/ppp/ip
+    ## Do not restart services if reserve over eth active
+    if [ "$iface" != "eth" ]; then
+        netservices start
+    fi
+    ## clear tries counter only if no ping failures
+    ## in case of ping failures let countdown continue
+    [ -f /tmp/ppp_tries ] && [ ! -f /tmp/ping_fail ] && rm /tmp/ppp_tries
+    [ -x /etc/init.d/sms ] && /etc/init.d/sms connect
+    [ -x $USER ] && $USER "$*" &
+fi
+if [ "$IFACE" = "ppp10" ]; then
+    [ -x /mnt/rwfs/settings/ipup.l2tp ] && /mnt/rwfs/settings/ipup.l2tp
+    if [ -f /mnt/rwfs/settings/settings.l2tp ]; then
+        . /mnt/rwfs/settings/settings.l2tp
+        if [ -n "$L2TP_REMOTE_NETWORK" ] && [ -n "$L2TP_REMOTE_NETMASK" ]; then
+            route add -net $L2TP_REMOTE_NETWORK netmask $L2TP_REMOTE_NETMASK dev $IFACE
+        fi
+    fi
+fi
+if [ "$IFACE" = "ppp11" ]; then
+    [ -x /mnt/rwfs/settings/ipup.pptp ] && /mnt/rwfs/settings/ipup.pptp
+    if [ -f /mnt/rwfs/settings/settings.pptp ]; then
+        . /mnt/rwfs/settings/settings.pptp
+       if [ -n "$PPTP_REMOTE_NETWORK" ] && [ -n "$PPTP_REMOTE_NETMASK" ]; then
+            route add -net $PPTP_REMOTE_NETWORK netmask $PPTP_REMOTE_NETMASK dev $IFACE
+       fi
+    fi
+fi
+rm $PID

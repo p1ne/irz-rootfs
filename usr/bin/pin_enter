@@ -1,0 +1,35 @@
+#!/bin/sh
+#ttyS1-lock 
+logger -t $0 "Started"
+[ -z "$1" ] && exit 1
+DEV=/dev/modem
+LOCK=/var/lock/modem
+FILE=/tmp/pin_enter.chat
+if [ -f /tmp/debug ]; then
+    FLAG="-v"
+else
+    FLAG="-S"
+fi
+
+lockfile-create --retry 5 $LOCK
+res=$?
+if [ "$res" != "0" ]; then
+    logger -t $0 "Cannot lock $DEV"
+    exit 1
+fi
+echo "ABORT ERROR" > $FILE
+echo "ABORT 'SIM PIN'" >> $FILE
+echo "TIMEOUT 20" >> $FILE
+echo "'' AT+CPIN=$1" >> $FILE
+echo "OK \d\d\d\d\d" >> $FILE
+echo "'' AT+CPIN?" >> $FILE
+echo "READY ''" >> $FILE
+echo "OK" >> $FILE
+echo "" >> $FILE
+chat $FLAG -t 20 -f $FILE >$DEV <$DEV
+RES=$?
+lockfile-remove $LOCK
+rm $FILE
+logger -t $0 "PIN entered: $RES"
+exit $RES
+

@@ -1,0 +1,69 @@
+#!/bin/sh
+[ -e /mnt/rwfs/settings/settings.ppp ] && . /mnt/rwfs/settings/settings.ppp
+simnum=`sim get`
+[ -z "$PPP_MAXFAIL" ] && PPP_MAXFAIL=3
+
+modem off 
+sleep 3
+## if switch disabled - set primary sim
+if [ "$PPP_SWITCH" != "1" ]; then
+    [ -z "$PPP_SIMCARD" ] && PPP_SIMCARD=1
+    [ "$PPP_SIMCARD" = "0" ] && PPP_SIMCARD=1
+    sim set $PPP_SIMCARD
+    logger -t sim_switch -p daemon.info "Default SIM card $PPP_SIMCARD selected"
+    modem on
+    sleep 10
+    exit 0
+fi
+
+## check if it is first run
+if [ ! -e /tmp/start ]; then
+    ## No. Check tries
+    if [ -f /tmp/ppp_tries ]; then
+        tries=`cat /tmp/ppp_tries`
+    else
+        tries=1
+        echo 1 > /tmp/ppp_tries
+    fi
+    ## switch to another sim if previous failed more than allowed
+    ## or if forced to (return to primary sim)
+    if [ "$tries" -ge "$PPP_MAXFAIL" ] || [ -f /tmp/force_switch ]; then
+        ## Switch sim
+        [ -f /tmp/force_switch ] && rm /tmp/force_switch
+        [ -f /tmp/ping_fail ] && rm /tmp/ping_fail
+        if [ "$simnum" = "1" ]; then
+            if [ "`sim test 2`" = "Present" ]; then
+                sim set 2
+                rm /tmp/ppp_tries
+                logger -t sim_switch -p daemon.info "Switching to SIM card 2"
+            else
+                logger -t sim_switch -p daemon.info "Will not switch to empty tray 2"
+            fi  
+        else
+            if [ "`sim test 1`" = "Present" ]; then
+                sim set 1
+                rm /tmp/ppp_tries
+                logger -t sim_switch -p daemon.info "Switching to SIM card 1"
+            else
+                logger -t sim_switch -p daemon.info "Will not switch to empty tray 1"
+            fi  
+        fi
+    else
+        ## Try again
+        logger -t sim_switch -p daemon.info "Still trying on SIM$simnum ($tries/$PPP_MAXFAIL)"
+        tries=$(( tries + 1 ))
+        echo $tries > /tmp/ppp_tries
+    fi
+else
+    ## yes, choose primary sim
+    rm /tmp/start
+    if [ ! "$PPP_SIMCARD" = "1" ] && [ ! "$PPP_SIMCARD" = "2" ]; then
+        PPP_SIMCARD=1
+    fi  
+    sim set $PPP_SIMCARD
+    logger -t sim_switch -p daemon.info "Default SIM card $PPP_SIMCARD selected"
+fi
+modem on
+sleep 10
+exit 0
+

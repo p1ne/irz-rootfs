@@ -1,0 +1,70 @@
+#! /bin/sh
+#
+# System-V init script for the openntp daemon
+#
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+DESC="network time protocol daemon"
+NAME=ntpd
+DAEMON=/usr/sbin/$NAME
+NTPDATE_BIN=/usr/bin/ntpdate
+
+# Gracefully exit if the package has been removed.
+test -x $DAEMON || exit 0
+
+# Read config file if it is present.
+if [ -r /mnt/rwfs/settings/settings.ntp ]; then
+    . /mnt/rwfs/settings/settings.ntp
+else
+    . /etc/defaults/settings.ntp
+fi
+case "$1" in
+  sync)
+    if [ ! -f /tmp/clocksync ]; then
+        [ -n "$NTP_PRIMARY_SERVER" ] && NTPSERVERS="$NTP_PRIMARY_SERVER"
+        [ -n "$NTP_SECONDARY_SERVER" ] && NTPSERVERS="$NTPSERVERS $NTP_SECONDARY_SERVER"
+        if [ -x $NTPDATE_BIN ] && [ -n "$NTPSERVERS" ]; then
+            echo "Getting initial time via ntp"
+            $NTPDATE_BIN  -u -p 3 -t 10 $NTPSERVERS > /dev/null 2>&1
+            if [ "$?" = "0" ]; then
+                hwclock -w -u
+                logger -t ntpdate "RTC synchronized"
+                touch /tmp/clocksync
+            else
+                logger -t ntpdate "RTC synchronization failed"
+            fi
+        else
+            echo "NTP servers list empty or no binary found!"
+        fi
+    fi
+    ;;
+  start)
+    if [ "$NTP_ENABLED" = "1" ]; then
+        F=/tmp/ntp.conf
+        echo "driftfile /tmp/ntp.drift" > $F
+        test "$NTP_PRIMARY_SERVER" && echo "server $NTP_PRIMARY_SERVER" >> $F
+        test "$NTP_SECONDARY_SERVER" && echo "server $NTP_SECONDARY_SERVER" >> $F
+        echo "server 127.127.1.0" >> $F
+        echo "fudge 127.127.1.0 stratum 10" >> $F
+        test "$NTPSERVER_ENABLED" != "1" && echo -e "restrict default ignore\nrestrict 127.0.0.0 mask 255.0.0.0" >> $F
+
+        echo -n "Starting $DESC: $NAME"
+        start-stop-daemon -S -q -x $DAEMON -- -c /tmp/ntp.conf
+        echo "."
+    fi
+    ;;
+  stop) echo -n "Stopping $DESC: $NAME"
+    start-stop-daemon -K -q -n $NAME
+    echo "."
+    ;;
+  restart) echo "Restarting $DESC: $NAME"
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
+  *) echo "Usage: $0 {start|stop|restart}" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

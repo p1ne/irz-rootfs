@@ -1,0 +1,6 @@
+#!/bin/sh
+DEV=/dev/modem
+tty-lock $DEV
+talk -t $DEV -c +GSN
+tty-unlock $DEV
+

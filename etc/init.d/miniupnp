@@ -1,0 +1,105 @@
+#!/bin/sh
+# start/stop miniupnpd
+CF=/mnt/rwfs/settings/settings.nat
+if [ -f "$CF" ]; then
+    . $CF
+else
+    . /etc/defaults/settings.nat
+fi
+usage(){
+    echo "Usage: $0 (start|stop|restart)"
+}
+
+start() {
+    echo -n "Startind miniupnpd: "
+    if [ ! "$NAT_UPNP_ENABLED" = "1" ]; then
+        echo "skipped"
+        exit 0
+    fi
+    EXTIF=""
+    if [ -f /tmp/reserve ]; then
+        EXTIF="`cat /tmp/reserve`0"
+    elif [ -f /var/ppp/remoteip ]; then
+        EXTIF="ppp0"
+    fi
+    if [ -z "$EXTIF" ]; then
+        echo "No external interface found!"
+        exit 1
+    fi
+    lip=`ifconfig eth0 | awk '/inet /{i=split($2, arr, ":"); print(arr[2])}'`
+    lmk=`ifconfig eth0 | awk '/inet /{i=split($4, arr, ":"); print(arr[2])}'`
+    lip=`ipcalc -n $lip $lmk|sed -e 's/NETWORK=//'`
+    LISTEN="$lip/$lmk"
+
+    . /etc/name
+    serial=`hwinfo serial`
+cat << EOF > /var/etc/miniupnpd.conf
+ext_ifname=$EXTIF
+listening_ip=eth0
+port=0
+enable_natpmp=yes
+enable_upnp=yes
+friendly_name=$TXT
+presentation_url=http://$lip/cgi-bin/index.cgi
+bitrate_up=1000000
+bitrate_down=10000000
+secure_mode=no
+system_uptime=yes
+notify_interval=60
+uuid=d3720cb0-0965-11e2-892e-0800200c9a66
+serial=$serial
+model_number=1
+allow 1024-65535 $LISTEN 1024-65535
+deny 0-65535 0.0.0.0/0 0-65535
+EOF
+
+    iptables -t nat -F MINIUPNPD
+    iptables -t nat -A PREROUTING -i $EXTIF -j MINIUPNPD
+    iptables -t filter -F MINIUPNPD
+    iptables -t filter -A FORWARD -i $EXTIF ! -o $EXTIF -j MINIUPNPD
+
+    miniupnpd -f /var/etc/miniupnpd.conf
+    RET=$?
+    if [ "$RET" = "0" ]; then
+        echo "Done"
+    else
+        echo "Failed"
+    fi
+}
+
+stop() {
+    echo -n "Stopping miniupnpd: "
+    iptables -t nat -F MINIUPNPD
+    iptables -t filter -F MINIUPNPD
+    iface=`iptables-save | grep MINIUPNPD | grep FORWARD | awk '{print $4}'`
+    if [ -n "$iface" ]; then
+        iptables -t nat -D PREROUTING -i $iface -j MINIUPNPD
+        iptables -t filter -D FORWARD -i $iface ! -o $iface -j MINIUPNPD
+    fi
+
+    killall -q miniupnpd
+    RET=$?
+    if [ "$RET" = "0" ]; then
+        echo "Done"
+    else
+        echo "Failed"
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    *)
+        usage
+        ;;
+esac
+clear_conntrack &
+exit $RET

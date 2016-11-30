@@ -1,0 +1,6 @@
+#!/bin/sh
+wget http://192.168.1.10/bin/rootfs.squashfs -O /tmp/rootfs || exit 1
+wget http://192.168.1.10/bin/uImage -O /tmp/uImage || exit 1
+flashcp -v /tmp/rootfs /dev/mtd7
+flashcp -v /tmp/uImage /dev/mtd5
+reboot

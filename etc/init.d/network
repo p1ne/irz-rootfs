@@ -1,0 +1,96 @@
+#!/bin/sh
+#
+# Start the network....
+#
+
+start() {
+
+echo "Starting network... "
+
+[ -e /mnt/rwfs/settings/settings.eth ] && . /mnt/rwfs/settings/settings.eth
+if [ -z "$ETH_IPADDR" ]; then
+    ETH_IPADDR="192.168.1.1"
+    ETH_NETMASK="255.255.255.0"
+fi
+
+ETH_MAC=`hwinfo mac`
+[ -z "$ETH_MAC" ] && ETH_MAC="01:23:45:67:89:ab"
+
+## Eth media config
+if [ "$ETH_MII_FORCE" = "1" ] && [ -n "$ETH_MII_MEDIA" ] && [ -n "$ETH_MII_DUPLEX" ]; then
+    mii-diag -F "$ETH_MII_MEDIA-$ETH_MII_DUPLEX" eth0 2>/dev/null 1>/dev/null
+else
+    mii-diag -A 100baseTX-FD eth0 2>/dev/null 1>/dev/null
+fi
+## Loopback 
+ifconfig lo 127.0.0.1 netmask 255.0.0.0
+
+netservices stop 1>/dev/null 2>/dev/null
+
+## Primary IP
+ifconfig eth0 down 2>/dev/null
+ifconfig eth0 $ETH_IPADDR netmask $ETH_NETMASK hw ether $ETH_MAC up 2>/dev/null 1>/dev/null
+echo "Network: $ETH_IPADDR/$ETH_NETMASK/$ETH_MAC"
+
+## Secondary IP
+ifconfig eth0:0 down 2>/dev/null
+if [ "$ETH_SECONDARY" = "1" ]; then
+    ifconfig eth0:0 $ETH_IPADDR2 netmask $ETH_NETMASK2 up 2>/dev/null 1>/dev/null
+    echo "Secondary: $ETH_IPADDR2/$ETH_NETMASK2/$ETH_MAC"
+fi
+
+## USB-Eth
+ifconfig eth1 down 2> /dev/null
+if [ "$ETH_USB_LAN" = "1" ]; then
+    ifconfig eth1 $ETH_IPADDR3 netmask $ETH_NETMASK3 up 2>/dev/null 1>/dev/null
+    echo "USB-Ethernet: $ETH_IPADDR3/$ETH_NETMASK3"
+fi
+
+## Reserved
+if [ "$ETH_RESERVE" = "1" ]; then
+    if [ -z "`pidof reserved`" ]; then
+        /etc/init.d/reserve start
+    else
+        /etc/init.d/reserve stop
+        /etc/init.d/reserve start
+    fi
+fi
+
+/etc/init.d/iptables start
+/etc/init.d/pfwd start
+/etc/init.d/fw start
+## restart netservices
+netservices start
+
+}
+    
+stop() {
+    echo -n "Stopping network..."
+    killall reserve 2>/dev/null
+    /etc/init.d/reserve stop
+    ifconfig eth0 down 2>/dev/null
+    ifconfig eth0:0 down 2>/dev/null
+}
+
+restart() {
+    stop
+    start
+}   
+
+case "$1" in
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  restart|reload)
+    restart
+    ;;
+  *)
+    echo $"Usage: $0 {start|stop|restart}"
+    exit 1
+esac
+
+exit $?
+

@@ -1,0 +1,59 @@
+#!/bin/sh
+[ -e /mnt/rwfs/settings/settings.serial ] && . /mnt/rwfs/settings/settings.serial
+
+case $1 in
+   start|restart)
+        if [ "$1" = "start" ]; then
+            echo -n "Starting cont_check: "
+        else
+            echo -n "Restarting cont_check: "
+            killall -q -9 cont_check 2>/dev/null
+        fi  
+        if [ "$SEC_MODE" = "none" ] || [ -z "$SEC_MODE" ]; then
+            echo "skipped"
+            exit 0
+        fi
+        PHONES=`decode $SEC_PHONES`
+        OPEN=`decode $SEC_OPEN`
+        [ -z $OPEN ] && OPEN="open"
+        CLOSE=`decode $SEC_CLOSE`
+        [ -z $CLOSE ] && CLOSE="close"
+        case "$SEC_MODE" in
+            usbcom)
+                USBCOM=`getusbcom`
+                if [ -z "$USBCOM" ]; then
+                    echo "No USB-COM found"
+                    exit 1
+                fi
+                SEC_PORT="-p $USBCOM"
+                ;;
+            serial) SEC_PORT="-p /dev/ttyS3" ;;
+            gpio) SEC_PORT="-g"
+        esac
+        SMS_DEV=/dev/modem
+        cont_check -i $SEC_INTVL -n "$PHONES" -o "$OPEN" -c "$CLOSE" -s $SMS_DEV -b 115200 \
+ $SEC_PORT 1>/dev/null 2>/dev/null &
+        RETVAL=$?
+       if [ "$RETVAL" = "0" ]; then
+            echo "done"
+        else 
+            echo "failed"
+        fi
+        ;;
+
+    stop)
+        echo -n "Stopping cont_check: "
+        killall -q -9 cont_check 2>/dev/null
+        ret=$?
+        if [ "$ret" = "0" ]; then 
+            echo "done"
+        else
+            echo "failed"
+        fi  
+        exit $ret
+        ;;  
+    *)  
+        echo "Usage: $0 {start|restart|stop}"
+        exit 1
+esac
+

@@ -1,0 +1,38 @@
+#!/bin/sh
+## download and flash rootfs and kernel
+## give any argument to flash kernel
+
+. /etc/name
+
+SUBNET=`ifconfig eth0|grep 192.168|sed -e 's/^.*168.//'|sed -e 's/\..*$//'`
+SERVER=192.168.$SUBNET.10
+[ -e /etc/version ] && . /etc/version
+[ -n "$MODEL" ] && PREFIX="${MODEL}."
+mkdir /tmp/update
+
+## kernel
+if [ -n "$1" ]; then
+    FILE=${PREFIX}${BRANCH}.uImage
+    tftp -g -r $FILE -l /tmp/update/uImage.${EXT} $SERVER
+    if [ "$?" != "0" ]; then
+        echo "$FILE tftp download failed"
+        exit 1
+    fi
+fi
+## rootfs
+FILE=${PREFIX}${BRANCH}.rootfs.squashfs
+tftp -g -r $FILE -l /tmp/update/fsImage.${EXT} $SERVER
+if [ "$?" != "0" ]; then
+    echo "$FILE tftp download failed"
+    exit 1
+fi
+## md5
+tftp -g -r update.md5 -l /tmp/update/update.md5 $SERVER
+if [ "$?" != "0" ]; then
+    echo -n "Calculating md5... "
+    cd /tmp/update
+    md5sum * > /tmp/update/update.md5
+    echo "Done"
+fi
+## do update
+firmware_update.start /tmp/update

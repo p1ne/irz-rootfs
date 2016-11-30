@@ -1,0 +1,34 @@
+#!/bin/sh
+
+if [ -e /mnt/rwfs/settings/settings.remote ]; then
+    . /mnt/rwfs/settings/settings.remote
+else 
+    . /etc/defaults/settings.remote
+fi
+
+case "$1" in
+  start)
+    echo -n "Starting httpd: "
+    httpd -h /home/httpd -r `hostname` -c /etc/httpd.conf &
+    RETVAL=$?
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+    exit $RETVAL
+    ;;
+  stop)
+    echo -n "Stopping httpd: "
+    httpd_pid=`pidof httpd`
+    if [ ! -z "$httpd_pid" ]; then
+        killall httpd
+        RETVAL=$?
+        if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+        exit $RETVAL
+    else
+        echo "not running"
+        exit 0
+    fi
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+esac
+

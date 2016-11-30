@@ -1,0 +1,3 @@
+#m   h    dom  mon  dow  command
+*/1  *    *    *    *    /usr/bin/ppp_watch; /usr/bin/update_index
+*/10 *    *    *    *    /usr/sbin/logrotate /etc/logrotate.conf

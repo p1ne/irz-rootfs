@@ -1,0 +1,11 @@
+#!/bin/sh
+
+echo -n "Loading settings... "
+mount -t jffs2 /dev/mtdblock6 /mnt/rwfs -o rw,relatime
+if [ -d /mnt/rwfs/etc ]; then
+    echo "Done"
+    exit 0
+else
+    echo "Failed!"
+    exit 1
+fi

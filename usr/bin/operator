@@ -1,0 +1,93 @@
+#!/bin/sh
+# Status:
+# 0 Unknown
+# 1 Operator available
+# 2 Current operator
+# 3 Operator forbidden
+
+# Mode:
+# 0 Automatic
+# 1 Manual
+# 2 Deregister
+# 3 Set only format
+# 4 Manual -> Automatic
+
+# Format:
+# 0 Long alphanumeric
+# 2 Numeric
+
+FILE=/tmp/operator.tmp
+DEV=/dev/modem
+if [ -f /tmp/debug ]; then
+    CF="-v"
+else
+    CF="-S"
+fi
+
+usage() {
+    echo -e "Usage:\t$0 get"
+    echo -e "\t$0 set mode [operator]"
+    exit 0
+}
+
+sendcmd() {
+    tty-lock $DEV
+    logger -t operator -p daemon.info "Setting operator (CMD: $1)"
+    talk -t $DEV -d 60 -c +COPS=$1
+    res=$?
+    tty-unlock $DEV
+    WORD="Error ($res)"
+    [ "$res" = "0" ] && WORD="Done ($res)"
+    logger -t operator -p daemon.info "$WORD"
+    exit $res
+}
+
+[ -z "$1" ] && usage
+## check for pppd
+pppdpid=`pidof pppd`
+if [ -n "$pppdpid" ]; then
+    echo "Cannot use modem - pppd is running!"
+    exit 1
+fi
+
+case $1 in
+get)
+    tty-lock $DEV
+    logger -t operator -p daemon.info "Reading operators list"
+    talk -t $DEV -d 60 -c AT+COPS=? > $FILE
+    res=$?
+    tty-unlock $DEV
+    logger -t operator -p daemon.info "Done (RES: $res)"
+    cat $FILE | sed -e 's/^.*COPS: //' | sed -e 's/(//g' | sed -e 's/)/\n/g' \
+    | sed -e 's/^,*//g' | sed -e 's/^0,/[?] /g' | sed -e 's/^1,/[_] /g' \
+    | sed -e 's/^2,/[+] /g' | sed -e 's/^3,/[X] /g' | grep \" \
+    | sed -e 's/,0/,"GSM"/g' | sed -e 's/,1/,"GSM Compact"/g' | sed -e 's/,2/,"UTRAN"/g' \
+    | sed -e 's/,3/,"GSM EGPRS"/g' | sed -e 's/,4/,"UTRAN HSDPA"/g' | sed -e 's/,5/,"UTRAN HSUPA"/g' \
+    | sed -e 's/,6/,"UTRAN HSDPA HSUPA"/g' | sed -e 's/,7/,"E-UTRAN"/g'
+    exit $res
+    ;;
+set)
+    [ -z "$2" ] && usage
+    ##AT+COPS=<mode>[, <format>[, <oper>]]
+    case $2 in
+    0)  ## Automatic
+        sendcmd 0,0
+        ;;
+    1)  ## Manual
+        [ -z "$3" ] && usage
+        sendcmd 1,2,\"$3\"
+        ;;
+    4)  ## Man -> Auto
+        [ -z "$3" ] && usage
+        sendcmd 4,2,\"$3\"
+        ;;
+    *)  ## Not used
+        echo "Mode should be 0, 1 or 4"
+        exit 1
+        ;;
+    esac
+    ;;
+*)
+    usage
+    ;;
+esac

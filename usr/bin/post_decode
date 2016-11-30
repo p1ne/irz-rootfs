@@ -1,0 +1,7 @@
+#!/usr/bin/python
+# -*- coding: utf8 -*-
+
+import urllib, sys
+
+if len(sys.argv) > 1:
+    sys.stdout.write(urllib.unquote_plus(sys.argv[1]).replace('\r\n', '\n'))

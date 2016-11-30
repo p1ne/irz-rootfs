@@ -1,0 +1,25 @@
+#!/bin/sh
+## reads string from flash
+case $1 in
+    mac)
+        N=1
+        ;;
+    serial)
+        N=2
+        ;;
+    produced)
+        N=3
+        ;;
+    *)
+        echo "Usage: $0 (mac|serial|produced)"
+        exit 1
+        ;;
+esac
+STR=`cat /dev/mtd2 | head -n $N | tail -n 1`
+TST=`echo $STR |head -c 1 | sed -e 's/[a-zA-Z0-9]//g'`
+if [ -z "$TST" ]; then
+    echo $STR
+else
+    exit 1
+fi
+

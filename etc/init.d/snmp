@@ -1,0 +1,49 @@
+#!/bin/sh
+
+case "$1" in
+    start)
+        echo -n "Starting snmpd: "
+
+        [ -e /mnt/rwfs/settings/settings.snmp ] && . /mnt/rwfs/settings/settings.snmp
+
+        if [ "$SNMP_ENABLED" = "yes"  ]; then
+
+            vendor_param=" -V .1.3.6.1.4.1.35489"
+            auth_param=""
+
+            if [ "$SNMP_REQUIRE_AUTH" = "yes" ]; then
+                auth_param=" -a"
+            fi
+
+            if [ "$SNMP_CONTACT" != "" ] ; then
+                SNMP_CONTACT=`decode "$SNMP_CONTACT"`
+            fi
+
+            if [ "$SNMP_DESCRIPTION" != "" ]; then
+                SNMP_DESCRIPTION=`decode "$SNMP_DESCRIPTION"`
+            fi
+
+            if [ "$SNMP_LOCATION" != "" ]; then
+                SNMP_LOCATION=`decode "$SNMP_LOCATION"`
+            fi
+            mini_snmpd -c "$SNMP_COMMUNITY_STRING" -d "$SNMP_MOUNTPOINTS" -i "$SNMP_INTERFACES" -t "$SNMP_TIMEOUT" -C "$SNMP_CONTACT" -D "$SNMP_DESCRIPTION" -L "$SNMP_LOCATION" $auth_param $vendor_param 1>/dev/null 2>/dev/null &
+            RET=$?
+            if [ "$RET" = "0" ]; then 
+                echo "done"
+            else
+                echo "failed"
+            fi
+            exit $RET
+        else 
+            echo "skipped"
+        fi
+        ;;
+    stop)
+        killall mini_snmpd 2>/dev/null
+        echo "Stopping snmpd: stopped"
+        ;;
+
+    *)
+    echo "Usage: $0 {start|stop}"
+    ;;
+esac

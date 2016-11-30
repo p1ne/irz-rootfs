@@ -1,0 +1,81 @@
+#!/bin/sh
+
+## rewrite crontab
+CT=/var/spool/cron/crontabs/root
+[ ! -e "/var/spool/cron/crontabs/" ] && mkdir -p "/var/spool/cron/crontabs/"
+cat /etc/defaults/crontab_root > $CT
+
+## add alias for not root user
+root=`grep ":0:0:" /etc/passwd | sed -e 's/\:.*//'`
+if [ "$root" != "root" ]; then
+    if [ ! -e /var/spool/cron/crontabs/$root ]; then
+        cd /var/spool/cron/crontabs/
+        ln -s root $root
+        cd $OLDPWD
+    fi
+fi
+
+## check ppp connection
+[ -e /mnt/rwfs/settings/settings.ppp ] && . /mnt/rwfs/settings/settings.ppp
+SIM=`sim get`
+if [ "$SIM" = "1" ]; then
+    PING=$PPP_PING
+    PING_INTVL=$PPP_PING_INTVL
+    PING_REPEAT_INTVL=$PPP_PING_REPEAT_INTVL
+    PING_IPADDR=$PPP_PING_IPADDR
+    PING_COUNT=$PPP_PING_COUNT
+else
+    PING=$PPP_PING2
+    PING_INTVL=$PPP_PING_INTVL2
+    PING_REPEAT_INTVL=$PPP_PING_REPEAT_INTVL2
+    PING_IPADDR=$PPP_PING_IPADDR2
+    PING_COUNT=$PPP_PING_COUNT2
+fi
+
+if [ "$PING" = "1" ] && [ -n "$PING_IPADDR" ]; then
+    [ -z "$PING_INTVL" ] && PING_INTVL=5
+    [ -z "$PING_REPEAT_INTVL" ] && PING_REPEAT_INTVL=$PING_INTVL
+    [ -z "$PING_COUNT" ] && PING_COUNT=3
+    if [ -f /tmp/pingcount ]; then
+        echo "*/$PING_REPEAT_INTVL  *    *    *    *    /usr/bin/ppp_ping \"$PING_IPADDR\" $PING_COUNT" >> $CT
+    else
+        echo "*/$PING_INTVL  *    *    *    *    /usr/bin/ppp_ping \"$PING_IPADDR\" $PING_COUNT" >> $CT
+    fi
+fi
+
+## check openvpn connection
+[ -e /mnt/rwfs/settings/settings.openvpn ] && . /mnt/rwfs/settings/settings.openvpn
+if [ "$OPENVPN_ENABLED" = "1" ] && [ -n "$OPENVPN_PING2_IP" ] && [ -n "$OPENVPN_PING2_INT" ]; then
+    echo "*/$OPENVPN_PING2_INT  *    *    *    *    /usr/bin/ovpn_ping $OPENVPN_PING2_IP $OPENVPN_PING2_ALLOW" >> $CT
+fi
+
+## daily reboot
+[ -e /mnt/rwfs/settings/settings.dreboot ] && . /mnt/rwfs/settings/settings.dreboot
+if [ "$DREBOOT_ENABLED" = "1" ]; then
+    echo "$DREBOOT_MINUTES   $DREBOOT_HOURS   *    *    *    /etc/init.d/connection message \"Daily reboot at $DREBOOT_HOURS:$DREBOOT_MINUTES\"; [ ! -f /tmp/noreboot ] && /sbin/reboot" >> $CT
+fi
+
+## ipsec ping
+S=/mnt/rwfs/settings/settings.ipsec
+for i in `seq 5`; do
+    EN=`grep IPSEC${i}_ENABLED $S|sed -e "s/IPSEC${i}_ENABLED=//"`
+    IP=`grep IPSEC${i}_PINGTEST_IP $S|sed -e "s/IPSEC${i}_PINGTEST_IP=//"`
+    INT=`grep IPSEC${i}_PINGTEST_INT $S|sed -e "s/IPSEC${i}_PINGTEST_INT=//"`
+    if [ "$EN" = "1" ] && [ -n "$IP" ] && [ -n "$INT" ]; then
+        echo "*/$INT  *    *    *    *    /usr/bin/ipsec_ping $i" >> $CT
+    fi
+done
+
+## user crontab
+UC=/mnt/rwfs/settings/usercron
+if [ -x $UC ]; then
+    cat $UC >> $CT
+fi
+
+## start daemon if no update in progress
+if [ -f /tmp/noreboot ]; then
+    logger -t "$0" "/tmp/noreboot exist, crond not started!"
+    sleep 60
+else
+    crond -f -L /dev/null 2>/dev/null 1>/dev/null
+fi

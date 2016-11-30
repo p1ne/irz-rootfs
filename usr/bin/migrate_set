@@ -1,0 +1,22 @@
+#!/bin/sh
+## Migrate settings for new FW
+
+## Remote access
+N=/mnt/rwfs/settings/settings.nat
+R=/mnt/rwfs/settings/settings.remote
+if [ -e "$N" ] && [ ! -e "$R" ]; then
+    . /etc/defaults/settings.nat
+    . $N
+    echo "REMOTE_HTTP_EXT=$NAT_REMOTE_HTTP" > $R
+    echo "REMOTE_HTTP_EXT_PORT=$NAT_REMOTE_HTTP_PORT" >> $R
+    echo "REMOTE_SSH=1" >> $R
+    echo "REMOTE_SSH_PORT=22" >> $R
+    echo "REMOTE_SSH_EXT=$NAT_REMOTE_SSH" >> $R
+    echo "REMOTE_SSH_EXT_PORT=$NAT_REMOTE_SSH_PORT" >> $R
+    echo "REMOTE_TELNET=1" >> $R
+    echo "REMOTE_TELNET_PORT=23" >> $R
+    echo "REMOTE_TELNET_EXT=$NAT_REMOTE_TELNET" >> $R
+    echo "REMOTE_TELNET_EXT_PORT=$NAT_REMOTE_TELNET_PORT" >> $R
+    echo "REMOTE_SNMP_EXT=$NAT_REMOTE_SNMP" >> $R
+    echo "REMOTE_SNMP_EXT_PORT=$NAT_REMOTE_SNMP_PORT" >> $R
+fi

@@ -1,0 +1,110 @@
+#!/bin/sh
+
+[ -e /mnt/rwfs/settings/settings.sms ] && . /mnt/rwfs/settings/settings.sms
+[ -e /mnt/rwfs/settings/settings.ppp ] && . /mnt/rwfs/settings/settings.ppp
+
+SIM=`sim get`
+if [ "$SIM" = "1" ]; then
+    apn=`decode $PPP_APN`
+else
+    apn=`decode $PPP_APN2`
+fi
+[ -z "$apn" ] && apn="_auto_"
+OP=`gsminfo|grep operator|awk '{print $3}'| sed -e 's/\"//g'`
+SQ=`gsminfo|grep -i quality|awk '{print $5}' | sed -e 's/(//'| sed -e 's/)//'`
+
+send_sms() {
+    ## $1 - phone number
+    ## $2 - message
+    ## $3 - action
+    sms send +$1 "$2"
+    RET=$?
+    if [ "$RET" = "0" ]; then
+        echo "done"
+        logger -t sms_send -p daemon.info "Sending SMS to $1 on $3: Done"
+    else
+        echo "failed"
+        logger -t sms_send -p daemon.info "Sending SMS to $1 on $3: Fail"
+    fi
+    sleep 3
+}
+
+case "$1" in
+  start)
+    echo -n "Sending SMS on start: "
+    if [ "$SMS_SEND_POWERUP" = "1" ]; then
+        MSG="Unit $SMS_UNIT_ID has powered up. $OP, $SQ."
+        if [ ! "$SMS_PHONE_NO1" = "" ]; then
+            send_sms "$SMS_PHONE_NO1" "$MSG" "$1"
+        fi
+        if [ ! "$SMS_PHONE_NO2" = "" ]; then
+            send_sms "$SMS_PHONE_NO2" "$MSG" "$1"
+        fi
+    else
+        echo "skipped"
+    fi
+    ;;
+    connect)
+    echo -n "Sending SMS on connect: "
+    if [ "$SMS_SEND_CONNECT" = "1" ]; then
+        IP=`cat /var/ppp/ip`
+        MSG="Unit $SMS_UNIT_ID has connected to $apn, SIM$SIM. $OP, $SQ. IP: $IP"
+        if [ ! "$SMS_PHONE_NO1" = "" ]; then
+            send_sms "$SMS_PHONE_NO1" "$MSG" "$1"
+        fi
+        if [ ! "$SMS_PHONE_NO2" = "" ]; then
+            send_sms "$SMS_PHONE_NO2" "$MSG" "$1"
+        fi
+    else
+        echo "skipped"
+    fi
+    ;;
+    disconnect)
+    echo -n "Sending SMS on disconnect: "
+    if [ "$SMS_SEND_CONNECT" = "1" ]; then
+        MSG="Unit $SMS_UNIT_ID has disconnected from $apn, SIM$SIM. $OP, $SQ."
+        if [ ! "$SMS_PHONE_NO1" = "" ]; then
+            send_sms "$SMS_PHONE_NO1" "$MSG" "$1"
+        fi
+        if [ ! "$SMS_PHONE_NO2" = "" ]; then
+            send_sms "$SMS_PHONE_NO2" "$MSG" "$1"
+        fi
+    else
+        echo "skipped"
+    fi
+    ;;
+    eth-connect)
+    echo -n "Sending SMS on eth-connect: "
+    if [ "$SMS_SEND_ETH_CONNECT" = "1" ]; then
+        unitip=`cat /tmp/ip`
+        MSG="Unit $SMS_UNIT_ID has connected over USB-Ethernet. IP $unitip."
+        if [ ! "$SMS_PHONE_NO1" = ""  ]; then
+            send_sms "$SMS_PHONE_NO1" "$MSG" "$1"
+        fi
+        if [ ! "$SMS_PHONE_NO2" = ""  ]; then
+            send_sms "$SMS_PHONE_NO2" "$MSG" "$1"
+        fi
+    else
+        echo "skipped"
+    fi
+    ;;
+    eth-disconnect)
+    echo -n "Sending SMS on eth-disconnect: "
+    if [ "$SMS_SEND_ETH_DISCONNECT" = "1" ]; then
+        MSG="Unit $SMS_UNIT_ID has lost USB-Ethernet link."
+        if [ ! "$SMS_PHONE_NO1" = ""  ]; then
+            send_sms "$SMS_PHONE_NO1" "$MSG" "$1"
+        fi
+        if [ ! "$SMS_PHONE_NO2" = ""  ]; then
+            send_sms "$SMS_PHONE_NO2" "$MSG" "$1"
+        fi
+    else
+        echo "skipped"
+    fi
+    ;;
+  *)
+    echo "Bad argument: $1"
+    echo "Usage: $0 (start|connect|disconnect|eth-connect|eth-disconnect)"
+    exit 1
+esac
+

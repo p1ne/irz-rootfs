@@ -1,0 +1,94 @@
+#!/bin/sh
+## script watches for pppd and restarts pppd when needed
+[ -n "`pidof rcS`" ] && logger -t ppp_watch "rcS is running, not starting!" && exit 1
+
+[ -e /mnt/rwfs/settings/settings.eth ] && . /mnt/rwfs/settings/settings.eth
+[ -e /mnt/rwfs/settings/settings.ppp ] && . /mnt/rwfs/settings/settings.ppp
+
+if [ "$PPP_ENABLED" = "1" ]; then
+    ## Check for talk
+    tpid=`pidof talk`      
+    [ -z "$tpid" ] && tpid=0
+    for tpidi in `echo $tpid`; do
+        if [ "$tpidi" -gt "1" ]; then
+            tage=$(( `date +%s` - `stat -c %Z /proc/$tpid` ))
+            if [ "$tage" -gt "60" ]; then
+                logger -t ppp_watch -p daemon.info "Talk[$tpidi] seems to hang up. Restarting!"
+                kill -9 $tpidi
+            fi
+        fi
+    done
+    ## get pids for ppp and pppd
+    pppd="`pidof pppd`"
+    ppp="`pidof ppp``pidof S85ppp`"
+    ## If reserve enabled and pppd is not running and (current iface = ppp or PPPON = 1)
+    ## then start pppd
+    if [ -e /tmp/reserve ]; then
+        iface=`cat /tmp/reserve`
+        if [ -z "$pppd" ] && [ -z "$ppp" ]; then
+            if [ "$iface" = "ppp"  ] || [ "$ETH_RESERVE_PPPON" = "1" ] ; then
+                logger -t ppp_watch -p daemon.info "pppd is enabled, but not running. Restarting!"
+                /etc/init.d/ppp stop
+                /etc/init.d/ppp start
+            fi
+        fi
+    ## Normal mode
+    else
+        if [ -z "$pppd" ] && [ -z "$ppp" ]; then
+            ## Check if running
+            logger -t ppp_watch -p daemon.info "pppd is enabled, but not running. Restarting!"
+            /etc/init.d/ppp stop
+            /etc/init.d/ppp start
+        else
+            ## If running, check if hangup
+            if [ -n "$pppd" ]; then
+                for pppdi in `ls -1 /var/run/ppp*pid`; do
+                    pppdage=$(( `date +%s` - `stat -c %Z $pppdi` ))
+                    [ -f /tmp/debug ] && logger -t ppp_watch -p daemon.info "pppd[$pppdi] age is $pppdage"
+                    ipd=`pidof ip-down`
+                    if [ "$pppdage" -gt "300" ] && [ ! -f /var/ppp/ip ] && [ -z "$ipd" ]; then
+                        logger -t ppp_watch -p daemon.info "pppd[$pppdi] seems to hang up. Restarting!"
+                        kill -9 `cat $pppdi`
+                        /etc/init.d/ppp stop
+                        /etc/init.d/ppp start
+                    fi
+                done
+            fi
+        fi
+    fi
+fi
+
+
+## check if secondary sim in use and count down
+file=/tmp/countdown
+simnum=`sim get`
+## if secondary sim connected and 'try primary' enabled
+if [ ! $simnum = $PPP_SIMCARD ] && [ -e /var/ppp/ip ] && [ "$PPP_TRYPRIMARY" = "1" ]; then
+    if [ -e $file ]; then
+        ## check value
+        count=`cat $file`
+        if [ "$count" -le "1" ]; then
+            ## fall back to primary
+            logger -t ppp_watch -p daemon.info "Trying primary SIM card $PPP_SIMCARD"
+            rm $file
+            if [ "`sim test $PPP_SIMCARD`" = "Present" ]; then
+                ## switch sim if present
+                /etc/init.d/ppp stop
+                touch /tmp/force_switch
+                exit 0
+            else
+                ## stay on secondary if primary absent
+                logger -t ppp_watch -p daemon.info "No SIM card in tray $PPP_SIMCARD"
+                exit 0
+            fi
+        fi
+        ## continue countdown
+        ncount=$(($count - 1))
+        echo $ncount > $file
+    else
+        ## start countdown
+        echo $PPP_RETRY > $file
+    fi
+fi
+
+exit 0

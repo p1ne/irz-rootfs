@@ -1,0 +1,72 @@
+#!/bin/sh
+ . /mnt/rwfs/settings/settings.dyndns
+
+case "$1" in
+  start|restart)
+    if [ "$1" = "restart" ]; then
+        killall inadyn 2>/dev/null 1>/dev/null
+        echo -n "Restarting inadyn: "
+    else
+        echo -n "Starting inadyn: "
+    fi
+    
+    if [ "$DYNDNS_ENABLED" = "0" ]; then
+        echo "skipped"
+        exit 0
+    fi
+    
+    inadyn_pid=`pidof inadyn`
+    if [ ! -z"$inadyn_pid" ]; then 
+        killall inadyn
+    fi
+    echo "" > /var/log/inadyn.log
+        
+        if [ "$DYNDNS_UPDATE_INTERVAL" != "" ]; then
+            if [ "$DYNDNS_FORCE_UPDATE" = "1" ]; then
+                upd=" --forced-update $DYNDNS_UPDATE_INTERVAL"
+            else
+                upd=" --period $DYNDNS_UPDATE_INTERVAL"
+            fi
+        fi        
+    [ -z "$DYNDNS_SYSTEM" ] && DYNDNS_SYSTEM="dyndns"
+    [ -n "$DYNDNS_PASSWORD" ] && DYNDNS_PASSWORD=`echo $DYNDNS_PASSWORD | base64 -d`
+    [ -n "$DYNDNS_NAME" ] && DYNDNS_NAME=`echo $DYNDNS_NAME | base64 -d`
+    [ -n "$DYNDNS_URL" ] && DYNDNS_URL=`echo $DYNDNS_URL | base64 -d`
+    [ -n "$DYNDNS_USERNAME" ] && DYNDNS_USERNAME=`httpd -d $DYNDNS_USERNAME`
+    case $DYNDNS_SYSTEM in
+        dynd)   DNS_SYSTEM="--system dyndns@dyndns.org" ;;
+        noip)   DNS_SYSTEM="--system default@no-ip.com" ;;
+        free)   DNS_SYSTEM="--system default@freedns.afraid.org" ;;
+        zone)   DNS_SYSTEM="--system default@zoneedit.com" ;;
+        cust)   
+    		[ -z "$DYNDNS_URL" ] && DNS_SYSTEM="--system custom@http_svr_basic_auth --server-name $DYNDNS_NAME" || DNS_SYSTEM="--server-name $DYNDNS_NAME --server-url $DYNDNS_URL --system custom@http_svr_basic_auth "
+    		;;
+        *)      DNS_SYSTEM="" ;;
+    esac
+    [ -x /mnt/rwfs/settings/ipupdate ] && SCRIPT="--exec /mnt/rwfs/settings/ipupdate" || SCRIPT=""
+    ipaddr=`ifconfig eth0|grep "inet addr:"| sed -e 's/^.*addr://' |awk '{print $1}'`
+    [ -n "$ipaddr" ] && IPADDR="-H $ipaddr /"
+    inadyn $DNS_SYSTEM -u $DYNDNS_USERNAME -p $DYNDNS_PASSWORD -a $DYNDNS_HOSTNAME $SCRIPT $IPADDR --log_file /var/log/inadyn.log --background $upd
+    RETVAL=$?
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+    exit $RETVAL
+    ;;
+  stop)
+    echo -n "Stopping inadyn: "
+    inadyn_pid=`pidof inadyn`
+    if [ ! -z "$inadyn_pid" ]; then
+        killall inadyn
+        rm /var/log/inadyn.log
+        RETVAL=$?
+        if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+        exit $RETVAL
+    else
+        echo "not running"
+        exit 0
+    fi
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+esac
+

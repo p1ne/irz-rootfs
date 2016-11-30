@@ -1,0 +1,20 @@
+#!/bin/sh
+#ttyS1-lock
+DEV=/dev/modem
+FILE=/tmp/pin_unlock.chat
+if [ -f /tmp/debug ]; then
+    FLAG="-v"
+else
+    FLAG="-S"
+fi
+
+echo "ABORT ERROR" > $FILE
+echo "'' AT+CLCK=\"SC\",1,\"$1\"" >> $FILE
+echo "OK" >> $FILE
+echo "" >> $FILE
+chat $FLAG -t 15 -f $FILE >$DEV <$DEV
+RES=$?
+rm $FILE
+#ttyS1-unlock
+exit $RES
+

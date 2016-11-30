@@ -1,0 +1,2 @@
+#!/bin/sh
+lockfile-remove /var/lock/ttyS2

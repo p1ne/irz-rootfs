@@ -1,0 +1,38 @@
+#!/bin/sh
+# Set active SIM card
+
+newsim=$1
+gpio ?PA24 #read current sim 0/1
+oldsim=$?
+if [ "$newsim" = "0" ]; then
+    gpio ?PB11      #check for sim0
+    simpres=$?
+    if [ "$simpres" = "0" ]; then
+        gpio =PA6   #disconnect sim
+        gpio -PA29  #switch leds off
+        gpio -PA27
+        sleep 1
+        gpio -PA24  #switch to sim0
+        gpio -PA6   #connect sim
+        gpio +PA29  #turn led0 on
+    else
+        exit 1      #no sim
+    fi
+else
+    gpio ?PB9       #check for sim 1
+    simpres=$?
+    if [ "$simpres" = "0" ]; then
+        gpio =PA6   #disconnect sim
+        gpio -PA29  #switch leds off
+        gpio -PA27
+        sleep 1
+        gpio +PA24  #switch to sim1
+        gpio -PA6   #connect sim
+        gpio +PA27  #turn led1 on
+    else
+        exit 1      #no sim
+    fi
+fi
+exit 0                                                              
+
+

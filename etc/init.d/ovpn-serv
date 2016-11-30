@@ -1,0 +1,71 @@
+#!/bin/sh
+
+[ -e /mnt/rwfs/settings/settings.ovpns ] && . /mnt/rwfs/settings/settings.ovpns
+
+case "$1" in
+  start|restart)
+    if [ "$1" = "restart" ]; then
+        echo -n "Restarting openvpn server: "
+        kill `cat /var/run/ovpn-serv` 2> /dev/null
+    else
+        echo -n "Starting openvpn server: "
+    fi  
+    if [ "$OVPNS_ENABLED" != "1" ] || [ ! -e /tmp/ip ]; then
+        echo "skipped"
+        exit 0
+    fi 
+    ## iptables
+    iptables -t filter -F ovpns
+    if [ "$OVPNS_PROTO" = "udp" ]; then
+        ovpns_param="-p udp --dport $OVPNS_PORT"
+    else
+        ovpns_param="-p tcp --dport $OVPNS_PORT"
+    fi  
+    iptables -t filter -A ovpns $ovpns_param -j ACCEPT 
+    #server    
+    CONF=/etc/openvpn/server.conf
+    echo "dev tun" > $CONF
+    echo "proto $OVPNS_PROTO" >> $CONF
+    echo "port $OVPNS_PORT" >> $CONF
+    echo "client-config-dir /etc/openvpn/ccd" >> $CONF
+    decode $OVPNS_CA_CERT > /var/openvpn/ca.pem
+    decode $OVPNS_DH_PARAMS > /var/openvpn/dh.pem
+    decode $OVPNS_LOCAL_CERT > /var/openvpn/cert.pem
+    decode $OVPNS_LOCAL_KEY > /var/openvpn/key.pem
+    echo "ca /var/openvpn/ca.pem" >> $CONF
+    echo "dh /var/openvpn/dh.pem" >> $CONF
+    echo "cert /var/openvpn/cert.pem" >> $CONF
+    echo "key /var/openvpn/key.pem" >> $CONF
+    chmod 0600 /var/openvpn/key.pem
+    #user
+    decode $OVPNS_CONFIG >> $CONF
+    #clients
+    [ ! -e /mnt/rwfs/etc/openvpn/ccd ] && mkdir /mnt/rwfs/etc/openvpn/ccd
+    [ "$OVPN1_ENABLED" = "1" ] && decode $OVPN1_CONFIG > /etc/openvpn/ccd/`decode $OVPN1_NAME`
+    [ "$OVPN2_ENABLED" = "1" ] && decode $OVPN2_CONFIG > /etc/openvpn/ccd/`decode $OVPN2_NAME`
+    [ "$OVPN3_ENABLED" = "1" ] && decode $OVPN3_CONFIG > /etc/openvpn/ccd/`decode $OVPN3_NAME`
+    [ "$OVPN4_ENABLED" = "1" ] && decode $OVPN4_CONFIG > /etc/openvpn/ccd/`decode $OVPN4_NAME`
+    [ "$OVPN5_ENABLED" = "1" ] && decode $OVPN5_CONFIG > /etc/openvpn/ccd/`decode $OVPN5_NAME`
+    [ -x /mnt/rwfs/settings/ovpnserv.clientc ] $$ CC="--client-connect /mnt/rwfs/settings/ovpnserv.clientc"
+    [ -x /mnt/rwfs/settings/ovpnserv.clientd ] $$ CD="--client-disconnect /mnt/rwfs/settings/ovpnserv.clientd"
+    openvpn --config $CONF --log /var/log/ovpn-serv.log --verb 3 --writepid /var/run/ovpn-serv $CC $CD & 
+    RETVAL=$?
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+    ;;  
+  stop)
+    echo -n "Stopping openvpn server: "
+    iptables -t filter -F ovpns
+    kill `cat /var/run/ovpn-serv` 2>/dev/null
+    RETVAL=$?
+    rm /var/log/ovpn-serv.log
+    rm /etc/openvpn/ccd/*
+    rm /var/openvpn/*
+    rm /etc/openvpn/server.conf
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+    ;;  
+  *)  
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+esac
+clear_conntrack &
+exit $RETVAL

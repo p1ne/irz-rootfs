@@ -1,0 +1,138 @@
+#!/bin/sh
+[ -e /mnt/rwfs/settings/settings.ppp ] && . /mnt/rwfs/settings/settings.ppp
+if [ -f /var/run/ppp0.pid ]; then
+    p=`cat /var/run/ppp0.pid`
+    p=`ps |grep -v grep|grep $p`
+    [ -n "$p" ] && logger -t sim_check "Pppd is running!" && exit 1
+fi
+# get current sim
+simnum=`sim get`
+
+# check sim presence or skip if pointed to
+sim_check_pres
+res=$?
+
+# if error - try again
+if [ "$res" = "3" ]; then
+    sleep 20
+    sim_check_pres
+    res=$?
+    if [ "$res" = "3" ]; then
+        logger -t sim_check -p daemon.info "No SIM card found in tray $simnum!"
+        ## If reboot on sim fail enabled, then countdown and reboot
+        if [ "$PPP_REBOOT" = "1" ] && [ -n "$PPP_REBOOT_COUNT" ]; then
+            if [ -f /tmp/ppp_reboot ]; then
+                count=`cat /tmp/ppp_reboot`
+                count=$(( count + 1 ))
+                logger -t sim_check "SIM check failed: $count/$PPP_REBOOT_COUNT."
+                if [ "$count" -ge "$PPP_REBOOT_COUNT" ]; then
+                    if [ ! -f /tmp/noreboot ]; then
+                        /etc/init.d/connection message "SIM fail limit reached ($PPP_REBOOT_COUNT), rebooting!"
+                        reboot
+                    else
+                        logger -t sim_check "SIM fail limit reached ($PPP_REBOOT_COUNT), but reboot is disabled by FW upgrade"
+                    fi
+                fi
+                echo $count > /tmp/ppp_reboot
+            else
+                echo 1 > /tmp/ppp_reboot
+            fi
+        else
+            [ -f /tmp/ppp_reboot ] && rm /tmp/ppp_reboot
+        fi
+        exit 1
+    fi
+fi
+
+## Report PUK required
+if [ "$res" = "2" ]; then
+    echo "" > /var/run/sim_locked
+    logger -t sim_check -p daemon.info "PUK required for SIM card $simnum!"
+    exit 1
+fi
+
+#if pin required - enter it
+if [ "$res" = "1" ]; then
+    simpin="/mnt/rwfs/settings/settings.pin"$simnum
+    #find and enter pin
+    if [ -f $simpin ]; then
+        logger -t sim_check -p daemon.info "Unlocking SIM card $simnum..."
+        pin_enter `cat $simpin`
+        res=$?
+    else
+        logger -t sim_check -p daemon.info "PIN for SIM card $simnum required, but not found!"
+        exit 1
+    fi
+    #check if unlocked
+    if [ "$res" = "0" ]; then
+         logger -t sim_check -p daemon.info "SIM card $simnum unlocked successfully"
+         if [ -e /var/run/sim_locked ]; then
+             rm /var/run/sim_locked
+         fi
+    else
+        sim_check_pres
+        res=$?
+        if [ "$res" = "3" ]; then
+            logger -t sim_check -p daemon.info "SIM card $simnum error!"
+            exit 1
+        fi
+        if [ "$res" = "2" ]; then
+            logger -t sim_check -p daemon.info "SIM PUK required for SIM card $simnum!"
+            echo "" > /var/run/sim_locked
+            exit 1
+        fi
+        if [ "$res" = "1" ]; then
+            logger -t sim_check -p daemon.info "Wrong PIN for SIM card $simnum!"
+            echo "" > /var/run/sim_locked
+            exit 1
+        fi
+        if [ "$res" = "0" ]; then
+            logger -t sim_check -p daemon.info "SIM card $simnum unlocked successfully"
+            if [ -e /var/run/sim_locked ]; then
+                rm /var/run/sim_locked
+            fi
+        fi
+    fi
+fi
+# wait for registration
+sleep 10
+# check registration
+for i in `seq 10` ; do
+    sim_check_reg
+    err=$?
+    ## log signal quality
+    csq=`gsminfo | grep -i quality`
+    logger -t sim_check -p daemon.info "$csq"
+    case $err in
+        1)  ## home
+            opinfo
+            logger -t sim_check -p daemon.info "SIM card $simnum registered successfully (home)"
+            exit 0
+            ;;
+        5)  ## roaming
+            opinfo
+            if [ "$simnum" = "1" ]; then
+                ROAMING=$PPP_ALLOW_ROAMING
+            else
+                ROAMING=$PPP_ALLOW_ROAMING2
+            fi
+            if [ "$ROAMING" = "1" ]; then
+                logger -t sim_check -p daemon.info "SIM card $simnum registered successfully (Roaming)"
+                exit 0
+            else
+                logger -t sim_check -p daemon.info "SIM card $simnum is roaming but roaming disabled!"
+                exit 1
+            fi
+            ;;
+        *)
+            logger -t sim_check -p daemon.info "SIM card $simnum not registered yet ($i/10) (code: $res)"
+            sleep 10
+            ;;
+    esac
+done
+## log signal quality
+csq=`gsminfo |grep -i quality`
+logger -t sim_check -p daemon.info "$csq"
+logger -t sim_check -p daemon.info "SIM card $simnum not registred!"
+exit 1
+

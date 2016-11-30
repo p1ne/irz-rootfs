@@ -1,0 +1,60 @@
+#!/bin/sh
+
+if [ -f /mnt/rwfs/settings/settings.openvpn ]; then
+    . /mnt/rwfs/settings/settings.openvpn
+else
+    . /etc/defaults/settings.openvpn
+fi
+
+PING_IPADDR=$1
+PING_ALLOW=$2
+FLAG=/tmp/ovpn_ping
+[ -z "$PING_IPADDR" ] && echo "No address specified!" && exit 1
+[ -z "$PING_ALLOW" ] && PING_ALLOW=0
+
+restart() {
+    logger -t ovpn_ping -p daemon.info "Host $PING_IPADDR did not respond. Restarting pppd."
+    /etc/init.d/openvpn stop
+    /etc/init.d/openvpn start
+}
+
+tun=`ifconfig|grep $OPENVPN_DEVICE`
+if [ -n "$tun" ]; then
+    ping -I $OPENVPN_DEVICE $PING_IPADDR -c 5 > /dev/null
+    res=$?
+    if [ "$res" = "0" ]; then
+        ## Ping OK, clear counter.
+        logger -t ovpn_ping -p daemon.info "Host $PING_IPADDR is alive"
+        [ -f "$FLAG" ] && rm $FLAG
+    else
+        ## Ping failed, see if failures allowed.
+        if [ "$PING_ALLOW" = "0" ]; then
+            ## Failures not allowed, restart.
+            restart
+            exit 0
+        fi
+        ## Failures allowed, check counter.
+        if [ -f "$FLAG" ]; then
+            ## Counter exist, check and increase.
+            CNT=`cat $FLAG`
+            if [ "$CNT" -ge "$PING_ALLOW" ]; then
+                ## Limit reached, restart.
+                restart
+                rm $FLAG
+                exit 0
+            else
+                ## Increase counter.
+                CNT=$(( CNT + 1 ))
+                logger -t ovpn_ping -p daemon.info "Host $PING_IPADDR did not respond. Attempt $CNT of $PING_ALLOW."
+                echo $CNT > $FLAG
+                exit 0
+            fi
+        else
+            ## No counter, create one.
+            logger -t ovpn_ping -p daemon.info "Host $PING_IPADDR did not respond. Attempt 1 of $PING_ALLOW."
+            echo "1" > $FLAG
+            exit 0
+        fi
+    fi  
+fi
+

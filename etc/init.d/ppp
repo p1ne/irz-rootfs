@@ -1,0 +1,354 @@
+#!/bin/sh
+[ -e /mnt/rwfs/settings/settings.ppp ] && . /mnt/rwfs/settings/settings.ppp
+. /etc/version
+PID=/var/run/ppp.pid
+IPPID=/var/run/ppp_ip.pid
+
+_exit() {
+    [ -f "$PID" ] && rm $PID
+    exit $1
+}
+
+config_longcheer() {
+        if [ -n "$PPP_MODE" ]; then
+            case $PPP_MODE in
+                3g)     mode=1 ;;
+                2g)     mode=3 ;;
+                3gp)    mode=2 ;;
+                2gp)    mode=4 ;;
+                *)      mode=2 ;;
+            esac
+        fi
+        if [ -n "$PPP_BAND" ]; then
+            case $PPP_BAND in
+                00000100)   band="256,0,0" ;;
+                00000080)   band="128,0,0" ;;
+                00200000)   band="0,32,0"  ;;
+                00080000)   band="0,8,0"   ;;
+                00200100)   band="256,32,0" ;;
+                00000180)   band="384,0,0" ;;
+                00080080)   band="128,8,0" ;;
+                00280000)   band="0,40,0"  ;;
+                00400380)   band="896,96,0" ;;
+                *)          band="896,1272,131072" ;;
+            esac
+        fi
+        [ -z "$band" ] && band="896,1272,131072"
+        [ -z "$mode" ] && mode=2
+        tty-lock $DEV 
+        talk -t $DEV -c "+mododr=$mode"
+        logger -t ppp -p daemon.info "CMD:+mododr=$mode RES: $?"
+        talk -t $DEV -c "+bndprf=$band"
+        logger -t ppp -p daemon.info "CMD:+bndprf=$band RES: $?"
+        tty-unlock $DEV
+}
+
+config_huawei() {
+        if [ -n "$PPP_MODE" ]; then
+            case $PPP_MODE in
+                3g)
+                    mode=14
+                    order=2
+                    ;;
+                2g)
+                    mode=13
+                    order=1
+                    ;;
+                3gp)
+                    mode=2
+                    order=2
+                    ;;
+                2gp)
+                    mode=2
+                    order=1
+                    ;;
+                *)
+                    mode=2
+                    order=0
+                    ;;
+            esac
+        fi
+        [ -z "$PPP_BAND" ] && PPP_BAND="3FFFFFFF"
+        [ -z "$order" ] && order=0
+        [ -z "$mode" ] && mode=2
+        tty-lock $DEV
+        talk -t $DEV -c "^SYSCFG=$mode,$order,$PPP_BAND,1,2"
+        logger -t ppp -p daemon.info "CMD: ^SYSCFG=$mode,$order,$PPP_BAND,1,2 RES: $?"
+        tty-unlock $DEV
+}
+
+
+start() {
+    echo -n "Starting pppd: "
+    ## Check if pppd is already running
+    if [ -n "`ps www|grep 'pppd call internet'|grep -v grep`" ]; then
+        echo "pppd already running"
+        exit 0
+    fi
+    ## Check if ppp script is already running
+    if [ -f "$PID" ]; then
+        pid=`cat $PID`
+        if [ -n "`ps|grep ^${pid}`" ]; then
+            echo "ppp already running"
+            exit 0
+        else
+            rm $PID
+        fi
+    fi
+	echo $$ > $PID
+
+    ## Check if ip/down script done
+    if [ -f "$IPPID" ]; then
+        pid=`cat $IPPID`
+        if [ -n "`ps|grep ^${pid}`" ]; then
+            ## Another process is running
+            echo "ip-up/ip-down script is running"
+            _exit 0
+        else
+            rm $IPPID
+        fi
+    fi
+
+    ## we do this to get proper startup even if ppp is disabled
+    ## select sim
+    sim_switch
+    sleep 10
+    simnum=`sim get`
+    ## create new pppd config
+    if [ "$simnum" = "1" ]; then
+        PPP_USERNAME=`decode $PPP_USERNAME`
+        PPP_PASSWORD=`decode $PPP_PASSWORD`
+        PPP_APN=`decode $PPP_APN`
+    else
+        PPP_USERNAME=`decode $PPP_USERNAME2`
+        PPP_PASSWORD=`decode $PPP_PASSWORD2`
+        PPP_APN=`decode $PPP_APN2`
+        PPP_MTU=$PPP_MTU2
+        PPP_MRU=$PPP_MRU2
+        PPP_DIAL=$PPP_DIAL2
+        PPP_BAND=$PPP_BAND2
+        PPP_AUTH=$PPP_AUTH2
+        PPP_IPADDR=$PPP_IPADDR2
+        PPP_RIPADDR=$PPP_RIPADDR2
+        PPP_USEDNS=$PPP_USEDNS2
+        PPP_DNS_SERVER=$PPP_DNS_SERVER2
+        PPP_DNS_SECONDARY=$PPP_DNS_SECONDARY2
+        PPP_BAND=$PPP_BAND2
+        if [ "$MODEL" = "RCA" ]; then
+            PPP_ACCOUNT=$PPP_ACCOUNT2 ## RCA only
+        else
+            PPP_MODE=$PPP_MODE2 ## RUH only
+        fi
+    fi
+
+    ## Detect modem
+    V=`cat /sys/bus/usb/devices/1-1/idVendor`
+    P=`cat /sys/bus/usb/devices/1-1/idProduct`
+    if [ -n "$V" ] && [ -n "$P" ]; then
+        case "$V" in
+            1199)
+                modem="sierra"
+                DEV="/dev/`ls -1d /sys/bus/usb/devices/1-1/1-1\:1.4/tty* |sed -e 's/^.*tty/tty/'`"
+                ;;
+            1c9e)
+                modem="longcheer"
+                DEV="/dev/`ls -1d /sys/bus/usb/devices/1-1/1-1\:1.2/tty* |sed -e 's/^.*tty/tty/'`"
+                ;;
+            16d5)
+                modem="anydata"
+                DEV="/dev/`ls -1d /sys/bus/usb/devices/1-1/1-1\:1.0/tty* |sed -e 's/^.*tty/tty/'`"
+                ;;
+            22de)
+                modem="wetelecom"
+                DEV="/dev/`ls -1d /sys/bus/usb/devices/1-1/1-1\:1.0/tty* |sed -e 's/^.*tty/tty/'`"
+                ;;
+            *)
+                modem="huawei"
+                DEV="/dev/`ls -1d /sys/bus/usb/devices/1-1/1-1\:1.0/tty* |sed -e 's/^.*tty/tty/'`"
+                ;;
+        esac
+        if [ -e "$DEV" ]; then
+            logger -t ppp -p daemon.info "Device: $modem $DEV ($V:$P)"
+        else
+            logger -t ppp -p daemon.info "Cannot detect tty number!"
+            _exit 1
+        fi
+    else
+        logger -t ppp -p daemon.info "Cannot detect modem!"
+        _exit 1
+    fi
+    ## Configure modem
+    case $modem in
+        longcheer)  config_longcheer ;;
+        huawei)     config_huawei ;;
+        *)          logger -t ppp -p daemon.info "No modem configuration performed" ;;
+    esac  
+
+    ## check selected sim
+    err=`sim_check`
+    res=$?
+        if [ ! "$res" = "0" ]; then
+            if [ -f /tmp/simstatus ]; then
+                ERR=`cat /tmp/simstatus`
+            else
+                ERR="ERROR: $err"
+            fi
+            echo "Current SIM card: $simnum ($ERR)" > /tmp/opinfo
+            _exit 1
+        fi
+    ## Get sim number and stats
+    opinfo
+    if [ "$PPP_ENABLED" = "1" ]; then
+        ## rewrite crontab due to ping
+        /etc/init.d/cron restart 2>/dev/null 1>/dev/null
+
+        ## fill secrets files
+        writesecret ppp0 del
+        case "$PPP_AUTH" in
+            pap)
+                PAP=""
+                CHAP="refuse-chap refuse-mschap refuse-mschap-v2"
+                writesecret ppp0 pap $PPP_USERNAME $PPP_PASSWORD
+                ;;
+            chap)
+                PAP="refuse-pap"
+                CHAP=""
+                writesecret ppp0 chap $PPP_USERNAME $PPP_PASSWORD
+                ;;
+            *)
+                PAP=""
+                CHAP=""
+                writesecret ppp0 pap $PPP_USERNAME $PPP_PASSWORD
+                writesecret ppp0 chap $PPP_USERNAME $PPP_PASSWORD
+                ;;
+        esac 
+        chmod 600 /etc/ppp/pap-secrets
+        chmod 600 /etc/ppp/chap-secrets
+        [ -z "$PPP_SOFTRETR" ] && PPP_SOFTRETR=3
+        [ -z "$PPP_USERNAME" ] && PPP_USERNAME=user
+        [ -z "$PPP_PASSWORD" ] && PPP_PASSWORD=pass
+
+        ## Use operator DNS
+        [ "$PPP_USEDNS" = "usepeerdns" ] && PEERDNS="usepeerdns"
+        ## Use own DNS
+        if [ "$PPP_USEDNS" = "useowndns" ]; then
+    	    PEERDNS=""
+            echo "nameserver $PPP_DNS_SERVER" > /var/etc/resolv.conf.ppp
+            [ -n "$PPP_DNS_SECONDARY" ] && echo "nameserver $PPP_DNS_SECONDARY" >> /var/etc/resolv.conf.ppp
+        fi
+        ## Do not use DNS
+        [ "$PPP_USEDNS" = "usenonedns" ] && ( echo "" > /var/etc/resolv.conf.ppp; PEERDNS="" )
+
+if [ "$MODEL" != "RCA" ]; then
+        ## Use autodetected APN if none 
+        if [ -z "$PPP_APN" ]; then
+            if [ -e /tmp/opnumber  ]; then
+                . /tmp/opnumber
+                if [ -n "$opnum" ]; then
+                    code="/$opnum/{print \$2}"
+                    PPP_APN=`awk "$code" /etc/apnlist`
+                    logger -t ppp -p daemon.info "APN $PPP_APN for operator $opnum"
+                else
+                    logger -t ppp -p daemon.info "Operator number file empty!"
+                fi
+            else
+                    logger -t ppp -p daemon.info "Operator number file not exist!"
+            fi
+        fi
+fi
+
+        ## PPP persist connection
+        if [ "$PPP_PERSIST" = "0" ]; then
+            PERSIST=nopersist
+        else
+            PERSIST=persist
+        fi
+if [ "$MODEL" = "RCA" ]; then
+        ## chat defaults (RCA only)
+        [ -z "$PPP_ACCOUNT" ] && PPP_ACCOUNT=0
+        [ -z "$PPP_BAND" ] && PPP_BAND=1
+        cat /etc/ppp/chat.default.RCA | sed -e "s/_band/"$PPP_BAND"/" | sed -e "s/_crm/"$PPP_ACCOUNT"/" | sed -e "s/_dial/"$PPP_DIAL"/" > /etc/ppp/chat
+else
+        ## chat defaults RUH
+        cat /etc/ppp/chat.default | sed -e "s/_apn/"$PPP_APN"/" | sed -e "s/_dial/"$PPP_DIAL"/" > /etc/ppp/chat
+fi
+        ## common internet params
+        cat /etc/ppp/internet.default | sed -e "s|_tty|$DEV|" | sed -e "s/_softretr/$PPP_SOFTRETR/" | sed -e "s|_username|$PPP_USERNAME|" | sed -e "s/_usepeerdns/$PEERDNS/" | sed -e "s/_mtu/$PPP_MTU/" | sed -e "s/_mru/$PPP_MRU/" | sed -e "s/_pap/$PAP/" | sed -e "s/_chap/$CHAP/" | sed -e "s/persist/$PERSIST/" > /etc/ppp/peers/internet
+        [ -f /tmp/debug ] && echo "show-password" >> /etc/ppp/peers/internet
+        if [ -n "$PPP_IPADDR" ] || [ -n "$PPP_RIPADDR" ]; then
+            echo "$PPP_IPADDR:$PPP_RIPADDR" >> /etc/ppp/peers/internet
+        fi
+        /etc/init.d/connection dialing $PPP_APN
+        sleep 1
+        pppd call internet
+        RETVAL=$?
+
+        if [ "$RETVAL" = "0" ]; then
+            echo "done"
+        else
+            echo "failed"
+        fi
+        _exit $RETVAL
+    else
+        echo "skipped"
+        _exit 0
+    fi
+}
+
+stop() {
+        echo -n "Stopping pppd: "
+        [ -f /tmp/pingcount ] && rm /tmp/pingcount
+        pppd_pid=`ps www|grep 'pppd call internet'|grep -v grep`
+        if [ -n "$pppd_pid" ]; then
+            killall pppd 2> /dev/null
+            RETVAL=$?
+            ## Wait until pppd exits
+            while true; do
+                sleep 1
+                n=$(( n + 1 ))
+                [ -z `ps www|grep 'pppd call internet'|grep -v grep` ] && break
+                if [ "$n" = "30" ]; then
+                    killall -9 pppd
+                    RETVAL=$?
+                    break
+                fi
+            done
+            rm /var/log/pppd.log
+            if [ "$RETVAL" = "0" ]; then
+                echo "done"
+            else
+                echo "failed"
+            fi
+            _exit $RETVAL
+        else
+            echo "not running"
+            _exit 0
+        fi
+        }
+
+usage() {
+    echo "Usage: $0 {start|stop|restart}"
+}
+
+if [ -z "$1" ]; then
+    usage
+    _exit 1
+else
+    case $1 in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    *)
+        usage
+        _exit 1
+        ;;
+    esac
+fi
+

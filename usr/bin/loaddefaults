@@ -1,0 +1,39 @@
+#!/bin/sh
+# create default rwfs
+echo -n "Loading default settings... "
+logger -t loaddefaults "Loading default settings..."
+mkdir /tmp/jffs
+cd /tmp/jffs
+for dir in "etc etc/racoon etc/network etc/dropbear etc/ppp etc/ppp/peers etc/openvpn etc/openvpn/ccd settings var var/racoon etc/network/if-pre-up.d etc/network/if-up.d etc/network/if-down.d etc/network/if-post-down"; do
+    mkdir $dir
+done
+cp /etc/defaults/settings* /tmp/jffs/settings/
+cat /etc/defaults/shadow > /tmp/jffs/etc/shadow
+cat /etc/defaults/passwd > /tmp/jffs/etc/passwd
+cat /etc/defaults/httpd.conf > /tmp/jffs/etc/httpd.conf
+cat /etc/defaults/localtime > /tmp/jffs/etc/localtime
+mkfs.jffs2 -o /tmp/rwfs.jffs2
+umount -f /mnt/rwfs 2>/dev/null
+if [ ! "$?" = "0" ]; then
+    logger -t loaddefaults "umount failed!"
+fi
+flash_erase /dev/mtd6 0 0 2>/dev/null 1>/dev/null
+if [ ! "$?" = "0" ]; then
+    logger -t loaddefaults "flash_erase failed!"
+fi
+flashcp /tmp/rwfs.jffs2 /dev/mtd6
+if [ ! "$?" = "0" ]; then
+    logger -t loaddefaults "flashcp failed!"
+fi
+mount -t jffs2 /dev/mtdblock6 /mnt/rwfs -o rw,relatime
+if [ ! "$?" = "0" ]; then
+    logger -t loaddefaults "mount failed!"
+fi
+cd /tmp
+rm -rf jffs
+rm rwfs.jffs2
+if [ -d /mnt/rwfs/etc ]; then
+    logger -t loaddefaults "Done"
+else
+    logger -t loaddefaults "Failed"
+fi

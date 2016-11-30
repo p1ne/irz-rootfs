@@ -1,0 +1,87 @@
+#!/bin/sh
+## starts and stops syslogd
+## TODO: add settings handling to allow remote logging
+#[ -e "/etc/version" ] && . /etc/version
+
+usage() {
+    echo "Usage: $0 (start|stop|restart)"
+    exit 0
+}
+
+start() {
+    echo -n "Starting syslogd... "
+    killall -q syslogd
+
+    if [ -e /mnt/rwfs/settings/settings.syslog ]; then
+        . /mnt/rwfs/settings/settings.syslog
+    else
+        SYSLOG_LOCALLY=1
+    fi
+
+    if [ "$SYSLOG_LOCALLY" = "1" ]; then
+        options=" -L"
+        log=def
+        if [ -e "/dev/sda1" ]; then
+            usb status > /dev/null
+            res=$?
+            if [ "$res" = "0" ]; then
+                touch /mnt/usb/messages 2>/dev/null
+                res=$?
+                if [ "$res" = "0" ]; then
+                    log=usb
+                fi
+            fi
+        fi
+        if [ "$log" = "usb" ]; then
+            ## log to usb drive
+            options=$options" -O /mnt/usb/messages"
+        fi
+    fi
+
+    if [ "$SYSLOG_NETWORK" = "1" ]; then
+        options=$options" -R "$SYSLOG_NETWORK_ADDRESS
+        [ -n "$SYSLOG_NETWORK_PORT" ] && options=$options":"$SYSLOG_NETWORK_PORT
+    fi
+
+    /sbin/syslogd$options
+    res=$?
+    if [ "$res" = "0" ]; then
+        echo "done"
+    else
+        echo "failed"
+    fi
+    return $res
+}
+
+stop() {
+    echo -n "Stopping syslogd... "
+    killall -q syslogd
+    res=$?
+    if [ "$res" = "0" ]; then
+        echo "done"
+    else
+        echo "failed"
+    fi
+    return $res
+}
+
+[ -z "$1" ] && usage
+
+case "$1" in
+    start)
+        start
+        exit $?
+        ;;
+    stop)
+        stop
+        exit $?
+        ;;
+    restart)
+        stop
+        start
+        exit $?
+        ;;
+    *)
+        usage
+        ;;
+esac

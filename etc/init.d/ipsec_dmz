@@ -1,0 +1,43 @@
+#!/bin/sh
+## configure dmz bypass for ipsec
+[ -e /mnt/rwfs/settings/settings.nat ] && . /mnt/rwfs/settings/settings.nat
+[ -e /mnt/rwfs/settings/settings.ipsec ] && . /mnt/rwfs/settings/settings.ipsec
+
+start() {
+    if [ "$NAT_DEFAULT_ENABLED" = "1" ]; then
+        iptables -t nat -F ipsec_dmz
+        if [ "$IPSEC1_ENABLED" = "1" ] ||  [ "$IPSEC2_ENABLED" = "1" ] || [ "$IPSEC3_ENABLED" = "1" ] || \
+        [ "$IPSEC4_ENABLED" = "1" ] || [ "$IPSEC5_ENABLED" = "1" ]; then
+            iptables -t nat -A ipsec_dmz -p esp -j ACCEPT
+            iptables -t nat -A ipsec_dmz -p udp --dport 500 -j ACCEPT
+        fi  
+        if [ "$IPSEC1_NAT_TRAVERSAL" = "1" ] || [ "$IPSEC2_NAT_TRAVERSAL" = "1" ] || [ "$IPSEC3_NAT_TRAVERSAL" = "1" ] \
+        || [ "$IPSEC4_NAT_TRAVERSAL" = "1" ] || [ "$IPSEC5_NAT_TRAVERSAL" = "1" ]; then
+            iptables -t nat -A ipsec_dmz -p udp --dport 4500 -j ACCEPT
+        fi  
+
+    fi 
+}
+
+stop() {
+    iptables -t nat -F ipsec_dmz
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    *)
+        echo "Usage: $0 (start|restart|stop)"
+        exit 1
+        ;;
+esac
+clear_conntrack &
+

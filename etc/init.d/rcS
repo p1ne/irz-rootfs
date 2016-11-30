@@ -1,0 +1,125 @@
+#!/bin/sh
+
+led busy 1
+## Reboot on panic and oops
+echo 5 > /proc/sys/kernel/panic
+echo 1 > /proc/sys/kernel/panic_on_oops
+
+## Set conntrack
+echo 7624  > /proc/sys/net/ipv4/netfilter/ip_conntrack_max
+echo 86400 > /proc/sys/net/ipv4/netfilter/ip_conntrack_tcp_timeout_established
+
+. /etc/version
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+
+echo "Creating /var subdirectories..."
+DIRS="cache lib lib/dhcp lib/ntp lock log mnt openvpn ppp racoon run spool tmp etc etc/ppp etc/ppp/peers etc/racoon etc/openntpd etc/network etc/openvpn etc/openvpn/ccd"
+for dir in $DIRS; do
+    mkdir -p /var/$dir
+done
+touch /var/log/lastlog  ## required when devtmpfs disabled
+touch /var/log/wtmp     ## can be omited otherwise
+
+mkdir /dev/pts
+mount -t devpts none /dev/pts
+
+## dev check for plugged devices
+mdev -s
+
+## Check reset button
+
+if [ "$MODEL" = "RUH3" ]; then
+    gpio +PD14
+    gpio ?PD14
+    res=$?
+else
+    gpio +PB28
+    gpio ?PB28
+    res=$?
+fi
+
+if [ "$res" = "0" ]; then
+    echo "Resetting configuration!"
+    
+    led defaults_flash 0
+    usleep 300000
+    led defaults_flash 1
+    usleep 300000
+    
+    loaddefaults
+    ## flash busy led
+    for n in [1 2 3]; do
+        led defaults_flash 0
+        usleep 300000
+        led defaults_flash 1
+        usleep 300000
+        led defaults_flash 0
+        usleep 300000
+    done
+    led busy 1
+else
+    ## load settings
+    loadset || loaddefaults
+fi
+[ -x /usr/bin/migrate_set ] && /usr/bin/migrate_set
+
+touch /tmp/start
+stty -F /dev/ttyS1 115200
+stty -F /dev/ttyS2 230400
+
+## prepare start page
+update_index 0
+cat /etc/issue.start > /tmp/issue
+echo "FW: $DATE $TIME $MODEL.$MAJOR.$MINOR.$BUILD.$BRANCH" >> /tmp/issue
+F=/mnt/rwfs/settings/unitname
+[ -s $F ] && echo `cat $F` >> /tmp/issue
+echo "" >> /tmp/issue
+H=/mnt/rwfs/settings/hostname
+[ ! -s $H ] &&  cat /etc/defaults/hostname > $H
+hostname `cat $H`
+echo "Hostname: `hostname`"
+
+## set timezone
+if [ ! -f /mnt/rwfs/etc/localtime ]; then
+    [ -f /mnt/rwfs/settings/settings.ntp ] && . /mnt/rwfs/settings/settings.ntp
+    [ -z "$NTP_TZ" ] && NTP_TZ="GMT-04"
+    cp /usr/share/zoneinfo/$NTP_TZ /mnt/rwfs/etc/localtime
+fi
+[ -e /mnt/rwfs/settings/settings.eth ] && . /mnt/rwfs/settings/settings.eth
+# Start all init scripts in /etc/init.d
+# executing them in numerical order.
+#
+for i in /etc/init.d/S??* ;do
+
+     # Ignore dangling symlinks (if any).
+     [ ! -f "$i" ] && continue
+#    echo "start script $i"
+     case "$i" in
+    *.sh)
+        # Source shell script for speed.
+        (
+        trap - INT QUIT TSTP
+        set start
+        . $i
+        )
+        ;;
+    *)
+        # No sh extension, so fork subprocess.
+        #if we in reserve mode, then doesn't start ppp
+        if [ "$i" = "/etc/init.d/S85ppp" ]; then
+            if [ "$ETH_RESERVE" = "0" ]; then
+                /etc/init.d/S85ppp start &
+            fi
+        else 
+            $i start
+        fi
+        ;;
+    esac
+done
+led busy 0
+
+[ "$MODEL" = "RUH3" ] && buzz 1 s
+[ "$MODEL" = "RС1" ] && echo 0 > /proc/sys/net/ipv4/ip_forward
+
+logger -s "`date +'%F %H:%M:%S'` System started"
+/etc/init.d/connection message "System started"

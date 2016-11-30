@@ -1,0 +1,16 @@
+#!/bin/sh
+script=$1
+shift 1
+
+export PATH=/usr/lib/irz-web/scripts/:$PATH
+
+. /usr/lib/irz-web/functions.sh
+
+echo "Content-type: text/html"
+echo ""
+
+echo "Please wait...<hr>"
+read FORM_URLENCODED
+export FORM_URLENCODED
+
+. "$script"

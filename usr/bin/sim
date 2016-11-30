@@ -1,0 +1,73 @@
+#!/bin/sh
+if [ -z $1 ]; then
+    echo "Usage: $0 action [number]"
+    echo "  action: set|test|get"
+    echo "  number: 1|2"
+    exit 1
+fi
+. /etc/version
+## On RUH2m SIM leds labels are swapped. Got to correct it.
+
+case "$1" in
+    set)
+        case "$2" in
+            1)
+        	    echo 1 > /sys/class/gpio/SIM_SELECT/value
+                if [ "$MODEL" = "RUH2m" ] || [ "$MODEL" = "RUHm" ]; then
+                    echo 0 > /sys/class/leds/SIM1/brightness
+                    echo 1 > /sys/class/leds/SIM2/brightness
+                else
+                	echo 1 > /sys/class/leds/SIM1/brightness
+                	echo 0 > /sys/class/leds/SIM2/brightness
+                fi
+                ;;
+            2)
+                echo 0 > /sys/class/gpio/SIM_SELECT/value
+                if [ "$MODEL" = "RUH2m" ] || [ "$MODEL" = "RUHm" ]; then
+                    echo 1 > /sys/class/leds/SIM1/brightness
+                    echo 0 > /sys/class/leds/SIM2/brightness
+                else
+                	echo 0 > /sys/class/leds/SIM1/brightness
+                	echo 1 > /sys/class/leds/SIM2/brightness
+                fi
+                ;;
+            *)
+                echo "Wrong number: $2"
+        esac
+        ;;
+    test)
+        case "$2" in
+            1)
+                res=`cat /sys/class/gpio/SIM1_PRES/value`
+                if [ "$res" = "0" ]; then
+                    echo "Present"
+                else
+                    echo "Absent"
+                fi
+                ;;
+            2)
+                res=`cat /sys/class/gpio/SIM2_PRES/value`
+                if [ "$res" = "0" ]; then
+                    echo "Present"
+                else
+                    echo "Absent"
+                fi
+                ;;
+            *)
+                echo "Wrong number: $2"
+        esac
+        ;;
+    get)
+        res=`cat /sys/class/gpio/SIM_SELECT/value`
+        if [ "$res" = "0" ]; then
+            echo "2"
+        else
+            echo "1"
+        fi
+        ;;
+    *)
+        echo "Usage: $0 set|test|get 1|2"
+        exit 1
+esac
+
+

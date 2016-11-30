@@ -1,0 +1,62 @@
+#!/bin/sh
+# regenerate hostname & unitname according to settings
+# "user" in ETC_UNITNAME/ETC_HOSTNAME means that we do not mess with
+# UNITNAMEFILE and HOSTNAMEFILE, but do regen ISSUEFILE (it's not tmpfs)
+
+[ -r /mnt/rwfs/settings/settings.etc ] && \
+    . /mnt/rwfs/settings/settings.etc
+
+x509SubjectCn () {
+    echo "`echo "$1" |grep Subject | grep CN |sed -e 's/^.*CN=//'`"
+}
+
+UNITNAMEFILE=/mnt/rwfs/settings/unitname
+ISSUEFILE=/tmp/issue
+cp -f /etc/issue.start $ISSUEFILE
+case "$ETC_UNITNAME" in
+    ovpn)
+        [ -e /mnt/rwfs/settings/settings.openvpn ] \
+            && . /mnt/rwfs/settings/settings.openvpn
+        cert=`echo "$OPENVPN_LOCAL_CERT" | base64 -d`
+        if [ -n "$cert" ]; then
+            unitname=$(x509SubjectCn "$cert")
+            echo "$unitname" > $UNITNAMEFILE
+            echo "$unitname" >> $ISSUEFILE
+        fi
+        ;;
+    snmp)
+        [ -e /mnt/rwfs/settings/settings.snmp ] \
+            && . /mnt/rwfs/settings/settings.snmp
+        desc=`echo "$SNMP_DESCRIPTION" | base64 -d`
+        location=`echo "$SNMP_LOCATION" | base64 -d`
+        contact=`echo "$SNMP_CONTACT" | base64 -d`
+        unitname=`echo "$desc $location $contact" | sed -e 's/ \+/ /g'`
+        echo "$unitname" > $UNITNAMEFILE
+        echo "$unitname" >> $ISSUEFILE
+        ;;
+    user)
+        cat $UNITNAMEFILE >> $ISSUEFILE
+        ;;
+    *)
+        rm -f $UNITNAMEFILE
+        ;;
+esac
+
+HOSTNAMEFILE=/mnt/rwfs/settings/hostname
+case "$ETC_HOSTNAME" in
+    ovpn)
+        [ -r /mnt/rwfs/settings/settings.openvpn ] \
+            && . /mnt/rwfs/settings/settings.openvpn
+        cert=`echo "$OPENVPN_LOCAL_CERT" | base64 -d`
+        [ -n "$cert" ] && x509SubjectCn "$cert" | tr ' ' '_' > $HOSTNAMEFILE
+        ;;
+    snmp)
+        [ -e /mnt/rwfs/settings/settings.snmp ] \
+            && . /mnt/rwfs/settings/settings.snmp
+        desc=`echo "$SNMP_DESCRIPTION" | base64 -d`
+        [ -n "$desc" ] && echo "$desc" | tr ' ' '_' > $HOSTNAMEFILE
+        ;;
+    user) ;;
+    *) cp -f /etc/defaults/hostname $HOSTNAMEFILE ;;
+esac
+hostname -F $HOSTNAMEFILE

@@ -1,0 +1,110 @@
+#!/bin/sh
+## configure firewall
+[ -e /mnt/rwfs/settings/settings.fw ] && . /mnt/rwfs/settings/settings.fw
+
+start() {
+    iptables -t filter -F fw
+    case $FW_MODE in
+        disable)
+            ## Disable specified, allow others
+            ACTION="DROP"
+            FINAL="ACCEPT"
+            FILTER="yes"
+            ;;
+        allow)
+            ## Allow specified, disable others
+            ACTION="ACCEPT"
+            FINAL="DROP"
+            FILTER="yes"
+            ;;
+        *)
+            ## Do not filter
+            FILTER="no"
+            ;;
+    esac
+    if [ "$FILTER" = "yes" ]; then
+        for i in `seq 1 10`; do
+            eval IPADDR="$"FW_RULE${i}_IPADDR
+            eval TYPE="$"FW_RULE${i}_TYPE
+            if [ -n "$IPADDR" ] || [ "$TYPE" = "any" ]; then
+                case $TYPE in
+                    any)
+                        source="0.0.0.0/0"
+                        ;;
+                    single)
+                        source="$IPADDR"
+                        ;;
+                    subnet)
+                        eval MASK="$"FW_RULE${i}_SUBNET
+                        source="$IPADDR/$MASK"
+                        [ -z "$MASK" ] && source=""
+                        ;;
+                    *)
+                        source=""
+                        ;;
+                esac
+                ## Define proto and port
+                eval PORT="$"FW_RULE${i}_PORT
+                eval PROTO="$"FW_RULE${i}_PROTO
+                case $PROTO in
+                    tcp)
+                        sport=""
+                        dport=""
+                        [ -n "$PORT" ] && sport="--sport=$PORT"
+                        [ -n "$PORT" ] && dport="--dport=$PORT"
+                        proto="-p tcp"
+                        ;;  
+                    udp)
+                        sport=""
+                        dport=""
+                        [ -n "$PORT" ] && sport="--sport=$PORT"
+                        [ -n "$PORT" ] && dport="--dport=$PORT"
+                        proto="-p udp"
+                        ;;
+                    icmp)
+                        sport=""
+                        dport=""
+                        [ -n "$PORT" ] && sport="--icmp-type=$PORT"
+                        [ -n "$PORT" ] && dport="--icmp-type=$PORT"
+                        proto="-p icmp"
+                        ;;  
+                    all)  
+                        sport=""
+                        dport=""
+                        proto=""
+                        ;;
+                esac
+                ## Add rules to chain for both directions
+                [ -n "$source" ] && iptables -t filter -A fw -s $source $proto $sport -j $ACTION
+                [ -n "$source" ] && iptables -t filter -A fw -d $source $proto $dport -j $ACTION
+            fi
+        done
+        ## Set default policy 
+        iptables -t filter -P FORWARD $FINAL
+    fi
+    ## End of firewall
+
+
+}
+
+stop() {
+    iptables -t filter -F fw
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    *)
+        echo "Usage: $0 (start|restart|stop)"
+        ;;
+esac
+clear_conntrack &
+

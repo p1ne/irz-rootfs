@@ -1,0 +1,123 @@
+#!/bin/sh
+
+[ -e /mnt/rwfs/settings/settings.openvpn ] && . /mnt/rwfs/settings/settings.openvpn || . /etc/defaults/settings.openvpn
+[ -e /mnt/rwfs/settings/settings.nat ] && . /mnt/rwfs/settings/settings.nat || . /etc/defaults/settings.nat
+CONF_FILE=/etc/openvpn/client.conf
+
+iptclear(){
+    iptables -t filter -F ovpn
+    iptables -t nat -F ovpn_nat
+    iptables -t nat -F ovpn_masq
+}
+
+case "$1" in
+  start|restart)
+    if [ "$1" = "restart" ]; then
+        echo -n "Restarting openvpnd: "
+        kill `cat /var/run/openvpn` 2>/dev/null
+    else
+        echo -n "Starting openvpnd: "
+    fi
+    if [ "$OPENVPN_ENABLED" != "1" ]; then
+        echo "skipped"
+        exit 0
+    fi
+
+    ## iptables
+    iptclear
+
+    [ -z "$OPENVPN_DEVICE" ] && OPENVPN_DEVICE=tun0
+    if [ "$OPENVPN_ENABLED" = "1" ]; then
+        if [ "$OPENVPN_NAT" = "1" ]; then
+            iptables -t nat -A ovpn_nat -i $OPENVPN_DEVICE -j pfwd
+            [ "$NAT_DISABLE_MASQ" = "0" ] && iptables -t nat -A ovpn_masq -o $OPENVPN_DEVICE -j MASQUERADE
+        fi
+        if [ "$OPENVPN_PROTO" = "udp" ]; then
+            ovpn_param="-p udp -m udp --dport $OPENVPN_PORT"
+        elif [ "$OPENVPN_PROTO" = "tcp-client" ]; then
+            ovpn_param="-p tcp -m tcp --sport $OPENVPN_PORT"
+        elif [ "$OPENVPN_PROTO" = "tcp-server" ]; then
+            ovpn_param="-p tcp -m tcp --dport $OPENVPN_PORT"
+        fi
+        [ -n "$ovpn_param" ] && iptables -t filter -A ovpn $ovpn_param -j ACCEPT
+    fi
+    echo "dev $OPENVPN_DEVICE" > $CONF_FILE
+    echo "proto $OPENVPN_PROTO" >> $CONF_FILE
+    echo "port $OPENVPN_PORT"   >> $CONF_FILE
+    [ -n "$OPENVPN_LOCAL_IF_IPADDR" ]   && echo "ifconfig $OPENVPN_LOCAL_IF_IPADDR $OPENVPN_REMOTE_IF_IPADDR" >> $CONF_FILE
+    [ -n "$OPENVPN_REMOTE_IPADDR" ]     && echo "remote $OPENVPN_REMOTE_IPADDR" >> $CONF_FILE
+    [ -n "$OPENVPN_REMOTE_NETWORK" ]    && echo "route $OPENVPN_REMOTE_NETWORK $OPENVPN_REMOTE_NETMASK" >> $CONF_FILE
+    if [ -n "$OPENVPN_PING_INTVL" ] && [ -n "$OPENVPN_PING_TOUT" ]; then
+        echo "keepalive $OPENVPN_PING_INTVL $OPENVPN_PING_TOUT" >> $CONF_FILE
+        echo "persist-tun" >> $CONF_FILE
+        echo "persist-key" >> $CONF_FILE
+    fi
+    [ -n "$OPENVPN_FRAGMENT" ]          && echo "fragment $OPENVPN_FRAGMENT" >> $CONF_FILE
+    [ "$OPENVPN_REDIRECT_GW" = "1" ]    && echo "redirect-gateway" >> $CONF_FILE
+    [ "$OPENVPN_COMP" = "lzo" ]         && echo "comp-lzo yes" >> $CONF_FILE
+    [ -n "$OPENVPN_HAND_WINDOW" ]       && echo "hand-window $OPENVPN_HAND_WINDOW" >> $CONF_FILE
+    [ -n "$OPENVPN_INACTIVE" ]          && echo "inactive $OPENVPN_INACTIVE" >> $CONF_FILE
+
+    case "$OPENVPN_AUTH" in
+        secret)
+            echo "secret /var/openvpn/secret.pem" >> $CONF_FILE
+            decode $OPENVPN_SECRET > /var/openvpn/secret.pem
+            chmod 600 /var/openvpn/secret.pem
+            ;;
+        passwd)
+            echo -e "client\nca /var/openvpn/ca.pem\nauth-user-pass /var/openvpn/passwd\nauth-retry nointeract" >> $CONF_FILE
+            decode $OPENVPN_CA_CERT > /var/openvpn/ca.pem
+            echo -e "$OPENVPN_USERNAME\\n$OPENVPN_PASSWORD" > /var/openvpn/passwd
+            chmod 600 /var/openvpn/passwd
+            ;;
+        tls-client)
+            echo -e "tls-client\nca /var/openvpn/ca.pem\ncert /var/openvpn/cert.pem\nkey /var/openvpn/key.pem" >> $CONF_FILE
+            decode $OPENVPN_CA_CERT > /var/openvpn/ca.pem
+            decode $OPENVPN_LOCAL_CERT > /var/openvpn/cert.pem
+            decode $OPENVPN_LOCAL_KEY > /var/openvpn/key.pem
+            chmod 600 /var/openvpn/key.pem
+            ;;
+        tls-server)
+            echo -e "tls-server\nca /var/openvpn/ca.pem\ndh /var/openvpn/dh.pem\ncert /var/openvpn/cert.pem\nkey /var/openvpn/key.pem" >> $CONF_FILE
+            decode $OPENVPN_CA_CERT > /var/openvpn/ca.pem
+            decode $OPENVPN_DH_PARAMS > /var/openvpn/dh.pem
+            decode $OPENVPN_LOCAL_CERT > /var/openvpn/cert.pem
+            decode $OPENVPN_LOCAL_KEY > /var/openvpn/key.pem
+            chmod 600 /var/openvpn/key.pem
+            ;;
+        tls-mclient)
+            echo -e "client\ntls-client\nca /var/openvpn/ca.pem\ncert /var/openvpn/cert.pem\nkey /var/openvpn/key.pem" >> $CONF_FILE
+            [ -n "$OPENVPN_RENEG_SEC" ] && echo "reneg-sec $OPENVPN_RENEG_SEC" >> $CONF_FILE
+            decode $OPENVPN_CA_CERT > /var/openvpn/ca.pem
+            decode $OPENVPN_LOCAL_CERT > /var/openvpn/cert.pem
+            decode $OPENVPN_LOCAL_KEY > /var/openvpn/key.pem
+            chmod 600 /var/openvpn/key.pem
+            ;;
+    esac
+    [ -x /mnt/rwfs/settings/openvpn.up ]        && echo -e "up /mnt/rwfs/settings/openvpn.up\nup-restart" >> $CONF_FILE
+    [ -x /mnt/rwfs/settings/openvpn.down ]      && echo -e "down /mnt/rwfs/settings/openvpn.down\ndown-pre" >> $CONF_FILE
+    [ -x /mnt/rwfs/settings/openvpn.ipchange ]  && echo -e "ipchange /mnt/rwfs/settings/openvpn.ipchange" >> $CONF_FILE
+    if [ -n "$OPENVPN_CONFIG_FILE" ]; then
+        decode $OPENVPN_CONFIG_FILE | tr -d '\r' >> $CONF_FILE
+    fi
+    ## dmz passthrough
+    /etc/init.d/ovpn_dmz restart
+    ## start openvpn
+    openvpn --writepid /var/run/openvpn --log /var/log/openvpn.log --verb 3 --script-security 2 --config $CONF_FILE &
+    RETVAL=$?
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+    ;;
+  stop)
+    echo -n "Stopping openvpnd: "
+    iptclear
+    kill `cat /var/run/openvpn` 2>/dev/null
+    RETVAL=$?
+    rm /var/log/openvpn.log
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+esac
+clear_conntrack &
+exit $RETVAL

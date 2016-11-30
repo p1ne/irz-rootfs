@@ -1,0 +1,67 @@
+#!/bin/sh
+if [ -z "$MAC" ] || [ -z "$SERIAL" ]; then
+    echo "Set MAC and SERIAL variables first!"
+    exit 1
+fi
+
+## HW Info
+[ -z "$PRODUCED" ] && PRODUCED=`date +%F_%T`
+echo $MAC > /tmp/hw
+echo $SERIAL >> /tmp/hw
+echo $PRODUCED >> /tmp/hw
+flashcp /tmp/hw /dev/mtd2
+if [ "$?" = "0" ]; then
+    echo "HW info write OK"
+else
+    echo "Failed to write HW info!"
+    exit 1
+fi
+
+## U-boot env
+fw_setenv bootdelay 2
+fw_setenv baudrate 115200
+fw_setenv ethaddr $MAC
+fw_setenv serial $SERIAL
+fw_setenv produced $PRODUCED
+fw_setenv ipaddr 192.168.1.1
+fw_setenv serverip 192.168.1.10
+fw_setenv bootargs root=/dev/mtdblock7 ro console=ttyS0,115200 mem=64M mtdparts=physmap-flash.0:16K\(boot\),32K\(settings\),8K\(hwinfo\),8K\(nv\),64K\(u-boot\),1408K\(kernel\),1536K\(rwfs\),5120K\(rootfs\)
+fw_setenv bootcmd bootm 10020000
+if [ "$?" = "0" ]; then
+    echo "--- U-Boot Environment ---"
+    fw_printenv
+    echo "--------------------------"
+else
+    echo "Failed to set env!"
+    exit 1
+fi
+
+cd /tmp
+loadfile() {
+    if [ -z "$1" ] || [ -z "$2" ]; then
+        echo "Error: 1=$1, 2=$2"
+        echo "Usage: loadfile filename device"
+        exit 1
+    fi
+    echo "Loading: $1 to $2"
+    tftp -g -r $1 -l $1 192.168.1.10
+    if [ "$?" != "0" ]; then
+        echo "tftp: cannot download $1"
+        exit 1
+    fi
+    flashcp -v $1 $2
+    if [ "$?" != "0" ]; then
+        echo "flashcp: cannot copy $1 to $2"
+        exit 1
+    fi
+    rm $1
+    echo 
+}
+
+## lad and flash boot and uboot
+loadfile b2oot.bin /dev/mtd0
+loadfile u-boot.bin.tess.gz /dev/mtd4
+
+## use tftp_reflash to upload FW
+tftp_reflash 2
+

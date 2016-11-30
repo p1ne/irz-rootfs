@@ -1,0 +1,182 @@
+#!/bin/sh
+## Prevent reboot by our scripts
+touch /tmp/noreboot
+## We do not clean this flag since if someone has started firmware upgrade
+## then he should also take care about missing SIM cards in case of unsuccessful
+## upgrade or flag will be cleared by reboot
+
+## Load name settings
+. /tmp/name
+BB=/tmp/busybox
+
+flash() {
+## $1 - file name
+## $2 - device name
+    for i in `seq 5`; do
+        DEV=`echo $2| sed -e 's|^.*/||'`
+        FLSIZE="0x`cat /proc/mtd|grep $DEV|awk '{print $2}'`"
+        led busy 1
+        if [ -e /tmp/flashw.lock ]; then
+           $BB sleep 10
+        fi
+        $BB touch /tmp/flashw.lock
+        echo "Try $i. Erasing $2" >> /tmp/update.log
+        /tmp/flash_erase $2 0 0 1>>/tmp/update.log 2>>/tmp/update.log
+        echo "Try $i. Writing $1 to $2: `date +'%F %H:%M:%S'`" >> /tmp/update.log
+        /tmp/flashcp -v $updatedir/$1 $2 1>>/tmp/update.log 2>>/tmp/update.log
+        $BB rm /tmp/flashw.lock
+        /tmp/rfill $updatedir/$1 $updatedir/$1.fill $FLSIZE  0xFF
+        MD1=`md5sum $updatedir/$1.fill|awk '{print $1}'`
+        MD2=`cat $2|md5sum|awk '{print $1}'`
+        led busy 0
+        if [ "$MD1" = "$MD2" ]; then
+            res=0
+            echo "MD5 OK ($MD2)" >>/tmp/update.log
+            break
+        else
+            res=1
+            echo "MD5 FAILED ($MD2)" >>/tmp/update.log 
+        fi
+    done
+}
+
+if [ ! -e "$1" ]; then
+    echo "$1 is not found, specify update path!"
+    exit 1
+fi
+
+if [ -f "$1" ]; then
+    echo -n "Reading package... "
+    updatedir=/tmp/update
+    mkdir $updatedir
+    tar xf $1 -C $updatedir
+    if [ "$?" = "0" ]; then
+        echo "OK"
+    else
+        exit 2
+    fi
+else
+    updatedir=$1
+fi
+
+cd $updatedir
+## check crc
+echo -n "Checking integrity... "
+md5sum -s -c $updatedir/update.md5
+res=$?
+## write firmware
+
+if [ "$res" = "0" ]; then
+    echo "Done"
+    /etc/init.d/cron stop
+    if [ -e $updatedir/pre-update ]; then
+        echo  "Executing pre-update script"
+        cd $updatedir
+        $BB sh ./pre-update
+        res=$?
+        cd -
+        if [ "$res" = "0" ]; then 
+            echo "Done"
+        else
+            echo "Fail"
+            FL=1
+        fi
+    fi
+    echo "Start: `date +'%F %H:%M:%S'`" > /tmp/update.log
+    echo "Programming flash memory, do not disconnect power source!"
+    echo "It may take several minutes."
+    sync
+    echo 3 > /proc/sys/vm/drop_caches
+    if [ -e $updatedir/fsImage.${EXT} ]; then
+        $BB echo -n "Writing filesystem... "
+        flash fsImage.${EXT} /dev/mtd7
+        if [ "$res" = "0" ]; then
+            $BB echo "Done! ($MD1)"
+        else
+            $BB echo "Failed! ($MD1 != $MD2)"
+            FL=1
+        fi
+        flag=1
+    fi
+    if [ -e $updatedir/uImage.${EXT} ]; then
+        $BB echo -n "Writing kernel... "
+        flash uImage.${EXT} /dev/mtd5
+        if [ "$res" = "0" ]; then
+            $BB echo "Done! ($MD1)"
+        else
+            $BB echo "Failed! ($MD1 != $MD2)"
+            FL=1
+        fi
+        flag=1
+    fi
+    if [ -e $updatedir/uboot.${EXT} ]; then
+        echo -n "Writing bootsector... "
+        flash uboot.${EXT} /dev/mtd4
+        if [ "$res" = "0" ]; then
+            $BB echo "Done! ($MD1)"
+        else
+            $BB echo "Failed! ($MD1 != $MD2)"
+            FL=1
+        fi
+        flag=1
+    fi
+    if [ -e $updatedir/boot.${EXT} ]; then
+        echo -n "Writing loader... "
+        flash boot.${EXT} /dev/mtd0
+        if [ "$res" = "0" ]; then
+            echo "Done! ($MD1)"
+        else
+            echo "Fail! ($MD1 != $MD2)"
+            FL=1
+        fi
+        flag=1
+    fi
+    ## write log to flash
+    $BB echo "End: `date +'%F %H:%M:%S'`" >> /tmp/update.log
+    $BB gzip /tmp/update.log
+    $BB flashcp -v /tmp/update.log.gz /dev/mtd1 1>/dev/null 2>/dev/null
+    ## exec post update
+    if [ -e $updatedir/post-update ]; then
+        $BB echo "Executing post-update script"
+        cd $updatedir
+        $BB sh post-update
+        res=$?
+        cd -
+        if [ "$res" = "0" ]; then 
+            $BB echo "Done"
+        else
+            $BB echo "Fail"
+            FL=1
+        fi
+    fi
+    ## flash busy led
+    for n in 1 2 3 ; do
+        led busy 1
+        $BB usleep 100000
+        led busy 0
+        $BB usleep 100000
+    done
+    ## Cleanup
+    $BB rm -rf $updatedir
+    if [ "$FL" = "1" ]; then
+        $BB echo "There were problems during firmware upgrade!"
+        $BB echo "You must upload firmware again!"
+        exit 4
+    fi
+    ## Return if no file flashed
+    if [ -z "$flag" ]; then
+        $BB echo "No files were found!"
+        exit 3
+    fi
+    $BB echo "Rebooting..."
+    rm /tmp/noreboot
+    NVLOG=/mnt/rwfs/settings/connection.log
+    echo "`$BB date +'%F %H:%M:%S'` Firmware update reboot" >> $NVLOG
+    $BB killall watchdog ## reboot after 1 minute if reboot cmd fails
+    $BB nohup $BB reboot -f -d 5 2>>$NVLOG 1>>$NVLOG &
+else
+    ## Cleanup
+    rm -rf $updatedir
+    echo -e "\nUpdate corrupted!"
+    exit 2
+fi

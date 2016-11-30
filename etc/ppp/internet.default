@@ -1,0 +1,19 @@
+_tty
+230400
+lock
+modem
+maxfail _softretr
+child-timeout 60
+connect '/usr/sbin/chat -v -f /etc/ppp/chat'
+persist
+novj
+_chap
+_pap
+mru _mru
+mtu _mtu
+name "_username"
+_usepeerdns
+lcp-echo-interval 30
+lcp-echo-failure 5
+debug
+logfile /var/log/pppd.log

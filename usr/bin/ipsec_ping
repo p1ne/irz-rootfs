@@ -1,0 +1,34 @@
+#!/bin/sh
+## ping IPSec tunnels and reconnect
+[ -z "$1" ] && echo "Specify tunnel number!" && exit 1
+TUN=$1
+LIP=`ifconfig eth0 | grep 'inet addr:' | awk '{print $2}' | sed -e 's/addr://'`
+S=/mnt/rwfs/settings/settings.ipsec
+TIP=`cat $S|grep IPSEC${TUN}_PINGTEST_IP|sed -e 's/^.*PINGTEST_IP=//'`
+RIP=`cat $S|grep IPSEC${TUN}_REMOTE_IPADDR|sed -e 's/^.*REMOTE_IPADDR=//'`
+if [ -z "$TIP" ]; then
+    echo "No target ip found!"
+    exit 1
+fi
+PING="ping -c 5 $TIP -I $LIP"
+if [ -e /var/racoon/racoon.sock ]; then
+    ## check connection
+    CON=`racoonctl -s /var/racoon/racoon.sock show-sa ipsec|grep $RIP`
+    if [ -z "$CON" ]; then
+        ## Establish connection
+        $PING 1>/dev/null 2>/dev/null
+        sleep 20
+    fi
+    ## Check connection
+    $PING 1>/dev/null 2>/dev/null
+    res=$?
+    if [ "$res" != "0" ]; then
+        logger -t ipsec_ping "Remote host $TIP not responding. Restarting tunnel $TUN to $RIP!"
+        racoonctl -s /var/racoon/racoon.sock vpn-disconnect $RIP
+        racoonctl -s /var/racoon/racoon.sock vpn-connect $RIP
+        $PING 1>/dev/null 2>/dev/null
+    else
+        [ -f /tmp/debug ] && logger -t ipsec_ping "Tunnel $TUN to $RIP, ping $TIP OK."
+    fi
+fi
+

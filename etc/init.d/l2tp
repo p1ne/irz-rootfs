@@ -1,0 +1,87 @@
+#!/bin/sh
+F=/mnt/rwfs/settings/settings.l2tp
+PPPOPTS="/var/l2tpd/pppoptions"
+CONF="/var/l2tpd/l2tpd.conf"
+
+if [ -f "$F" ]; then
+    . $F
+else
+    . /etc/defaults/settings.l2tp
+fi
+[ ! -d /var/l2tpd ] && mkdir /var/l2tpd
+
+case "$1" in
+  start|restart)
+    if [ "$1" = "restart" ]; then
+        echo -n "Restarting l2tpd: "
+        killall -9 xl2tpd 2> /dev/null
+        rm /var/run/xl2tpd.pid
+    else
+        echo -n "Starting l2tpd: "
+    fi
+    if [ "$L2TP_ENABLED" != "1" ]; then
+        echo "skipped"
+        exit 0
+    fi
+    iptables -t filter -F l2tp
+    cat > $CONF <<EOF
+[global]
+port = $L2TP_PORT
+EOF
+
+    if [ "$L2TP_MODE" = "client" ]; then
+        cat >> $CONF <<EOF
+[lac vpn]
+name = $(hostname)
+pppoptfile = $PPPOPTS
+lns = $L2TP_SERVER_IP:$L2TP_PORT
+autodial = yes
+redial = yes
+redial timeout = $L2TP_REDIAL_TIMEOUT
+EOF
+        [ -n "$L2TP_LOCAL_IP" ] && echo "local ip = $L2TP_LOCAL_IP" >> $CONF
+        [ -n "$L2TP_REMOTE_IP" ] && echo "remote ip = $L2TP_REMOTE_IP" >> $CONF
+
+        echo "noauth name $L2TP_USERNAME password $L2TP_PASSWORD noipdefault" > $PPPOPTS
+        if [ "$L2TP_DEFAULT_ROUTE" = "1" ] ;then
+            echo "defaultroute"
+        else
+            echo "nodefaultroute"
+        fi >> $PPPOPTS
+    else
+        iptables -t filter -A l2tp -p udp --dport $L2TP_PORT -j ACCEPT
+        if [ -z "$L2TP_LOCAL_IP" ]; then
+            . /mnt/rwfs/settings/settings.eth
+            L2TP_LOCAL_IP=${ETH_IPADDR}
+        fi
+        cat >> $CONF <<EOF
+[lns default]
+name = $(hostname)
+pppoptfile = $PPPOPTS
+local ip = $L2TP_LOCAL_IP
+EOF
+        if [ -n "$L2TP_CLIENT_START" -a -n "$L2TP_CLIENT_END" ]; then
+            echo "ip range = $L2TP_CLIENT_START - $L2TP_CLIENT_END" >> $CONF
+        fi
+        echo "auth ipcp-accept-local ipcp-accept-remote nodefaultroute" > $PPPOPTS
+        writesecret ppp10 chap $L2TP_USERNAME $L2TP_PASSWORD
+    fi
+    echo "unit 10 mtu 1400 mru 1400 lock local crtscts debug" >> $PPPOPTS
+    xl2tpd -c $CONF -C /var/l2tpd/l2tp-control
+    RETVAL=$?
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+    exit $RETVAL
+    ;;
+  stop)
+    echo -n "Stopping l2tpd: "
+    killall -9 xl2tpd 2> /dev/null
+    RETVAL=$?
+    rm /var/run/xl2tpd.pid
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+    exit $RETVAL
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+esac
+clear_conntrack &

@@ -1,0 +1,39 @@
+#!/bin/sh
+## Configure modem and send sms on boot if needed
+
+SMSCONF=/mnt/rwfs/settings/settings.sms
+PPPCONF=/mnt/rwfs/settings/settings.ppp
+[ -f $SMSCONF ] && . $SMSCONF
+[ -f $PPPCONF ] && . $PPPCONF
+
+## Exit if sms not enabled
+if [ ! "$SMS_SEND_POWERUP" = "1" ]; then
+    exit 0
+fi
+
+## Select SIM Card
+if [ "$PPP_SIMCARD" = "2" ]; then
+    PSIM=2
+    SSIM=1
+else
+    PSIM=1
+    SSIM=2 
+fi
+
+## Configure modem
+modem off
+sim set $PSIM
+modem on
+err=`sim_check`
+res=$?
+if [ ! "$res" = "0" ]; then
+    modem off
+    sim set $SSIM
+    modem on
+    err=`sim_check`
+    res=$?
+    if [ ! "$res" = "0" ]; then
+        echo "Failed to send SMS on boot"
+    fi
+fi
+/etc/init.d/sms start

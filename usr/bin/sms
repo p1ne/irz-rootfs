@@ -1,0 +1,91 @@
+#!/bin/sh
+# sms list
+# sms read id
+# sms delete id
+# sms send number message
+rept=/tmp/sms.rept
+
+cmd=$1
+num=$2
+msg=$3
+
+usage() {
+    echo "Usage: $0 command args" 
+    echo "  list            - List sms IDs" 
+    echo "  read id         - Read specified sms" 
+    echo "  delete id       - Delete specified sms" 
+    echo "  send number \"message\" - Send message to specified number" 
+}
+
+DEV=/dev/modem
+if [ -f /tmp/debug ]; then
+    FLAG="-v" 
+else
+    FLAG="-S" 
+fi
+
+case $cmd in
+    list)
+        tty-lock $DEV
+        talk -t $DEV -c '+cpms="ME","ME","ME";+cmgf=1;+cmgl="ALL"' > $rept
+        RET=$?
+        tty-unlock $DEV
+        cat $rept | grep '+CMGL:' | awk '{$1=""; print}' | awk -F, '{print $1}'
+        rm $rept
+        ;;
+    read)
+        if [ "$num" = "" ]; then
+            echo "No SMS ID specified!"
+            usage
+            exit 1
+        fi
+        tty-lock $DEV
+        talk -t $DEV -c "+cpms=\"ME\",\"ME\",\"ME\";+cmgf=1;+cmgr=$num" > $rept
+        RET=$?
+        tty-unlock $DEV
+        #find where sms title begins
+        line=`cat /tmp/sms.rept |awk '$1 ~ /CMGR:/  {print NR}'`
+        #get title
+        title=`cat $rept | sed $line'q;d'`
+        #print title fields
+        echo $title | awk -F\" '{print $2; print $4; print $6}'
+        line=$((line + 1))
+        #get sms body
+        #line - start line
+        #lines - total lines in report
+        lines=`cat $rept|wc -l`
+        msg=`cat $rept | sed 's/\^M//g' | sed -n $line','$lines'p'`
+        echo $msg
+        rm $rept
+        ;;
+    delete)
+        if [ "$num" = "" ]; then
+            echo "No SMS ID specified!"
+            usage
+            exit 1
+        fi
+        tty-lock $DEV
+        talk -t $DEV -c "+cpms=\"ME\",\"ME\",\"ME\";+cmgf=1;+cmgd=$num" > /dev/null
+        RET=$?
+        tty-unlock $DEV
+        ;;
+    send)
+        if [ "$num" = "" ] || [ "$msg" = "" ]; then
+            echo "No number or message specified!"
+            usage
+            exit 1
+        fi
+        send-sms `echo "$num" | sed 's/^+//'` "$msg"
+        RET=$?
+    ;;
+    *)
+        usage
+        RET=0
+    ;;
+esac
+
+if [ "$RET" = "0" ]; then
+    exit 0
+else
+    exit 1
+fi

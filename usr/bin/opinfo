@@ -1,0 +1,40 @@
+#!/bin/sh
+## Get network info
+FILE=/tmp/opinfo
+DEV=/dev/modem
+OPNUM=/tmp/opnumber
+
+simnum=`sim get`
+echo "Current SIM card: $simnum" > $FILE.tmp
+
+. /etc/version
+case "$MODEL" in
+RCA)
+    tty=`cat /tmp/cdma_tty` 2>/dev/null
+    if [ -n "$tty" ]; then
+        echo "STATUS" > $tty && cat $tty |tr -d '\000' >> $FILE.tmp
+    else
+        logger -t $0 "No CDMA TTY found!"
+    fi
+    ;;
+*)
+    tty-lock $DEV
+    talk -t $DEV -c +COPS=3,2
+    op=`talk -t $DEV -c +COPS?|awk -F, '{print $3}'|sed 's/\"//g'`
+    tty-unlock $DEV
+    if [ -n "$op" ]; then
+        echo "opnum=$op" > $OPNUM
+        code="/$op/{print \$2}"
+        operator=`awk "$code" /etc/mnclist`
+        echo "Current operator: $operator ($op)" >> $FILE.tmp
+    else
+        echo "Current operator: Unknown" >> $FILE.tmp
+    fi
+    OUT=`talk -t $DEV -c '+creg=2;+creg?;+creg=0'`
+    LAC=`echo $OUT|awk -F,\  '{print $2}'`
+    CELL=`echo $OUT|awk -F,\  '{print $3}'`
+    echo "LAC: $LAC" >> $FILE.tmp
+    echo "CellID: $CELL" >> $FILE.tmp
+    ;;
+esac
+mv $FILE.tmp $FILE

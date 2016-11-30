@@ -1,0 +1,51 @@
+#!/bin/sh
+DEV=/dev/modem
+FILE=/tmp/pin_test.chat
+REP=/tmp/pin_test.report
+LOCK=/var/lock/modem
+if [ -f /tmp/debug ]; then
+    FLAG="-v"
+else
+    FLAG="-S"
+fi
+
+echo "ABORT ERROR" > $FILE
+echo "ABORT 'SIM PIN'" >> $FILE
+echo "ABORT 'SIM PUK'" >> $FILE
+echo "TIMEOUT 10" >> $FILE
+echo "REPORT CPIN:" >> $FILE
+echo "'' AT+CPIN?" >> $FILE
+echo "'READY'" >> $FILE
+echo "" >> $FILE
+lockfile-create --retry 5 $LOCK
+res=$?
+if [ "$res" != "0" ]; then
+    logger -t $0 "Cannot lock $DEV"
+    exit 3
+fi
+chat $FLAG -r $REP -t 15 -f $FILE >$DEV <$DEV
+RES=$?
+lockfile-remove $LOCK
+PIN=`grep 'SIM PIN' $REP`
+PUK=`grep 'SIM PUK' $REP`
+rm $REP
+rm $FILE
+if [ "$RES" = "0" ]; then
+    logger -t $0 "SIM Ready"
+    echo "SIM Ready" > /tmp/simstatus
+    exit 0 ## No PIN required
+fi
+if [ -n "$PIN" ]; then
+    logger -t $0 "PIN required"
+    echo "PIN required" > /tmp/simstatus
+    exit 1 ## PIN required
+fi
+if [ -n "$PUK" ]; then
+    logger -t $0 "PUK required"
+    echo "PUK required" > /tmp/simstatus
+    exit 2 ## PUK required
+fi
+logger -t $0 "Error"
+echo "SIM Error" > /tmp/simstatus
+exit 3 ## Error
+

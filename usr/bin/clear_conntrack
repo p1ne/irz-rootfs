@@ -1,0 +1,13 @@
+#!/bin/sh
+## clear conntrack
+
+echo  0 > /proc/sys/net/ipv4/netfilter/ip_conntrack_icmp_timeout
+echo  0 > /proc/sys/net/ipv4/netfilter/ip_conntrack_udp_timeout
+echo  0 > /proc/sys/net/ipv4/netfilter/ip_conntrack_generic_timeout
+echo  0 > /proc/sys/net/ipv4/netfilter/ip_conntrack_udp_timeout_stream
+sleep 10
+echo 30 > /proc/sys/net/ipv4/netfilter/ip_conntrack_icmp_timeout
+echo 30 > /proc/sys/net/ipv4/netfilter/ip_conntrack_udp_timeout
+echo 30 > /proc/sys/net/ipv4/netfilter/ip_conntrack_generic_timeout
+echo 60 > /proc/sys/net/ipv4/netfilter/ip_conntrack_udp_timeout_stream
+

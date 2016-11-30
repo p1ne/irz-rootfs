@@ -1,0 +1,18 @@
+#!/bin/sh
+[ -e /tmp/opinfo ] && cat /tmp/opinfo
+. /etc/version
+case "$MODEL" in
+RCA)
+    ## RCA stats included in opinfo
+    ;;
+*)
+    t="/dev/stat"
+    if [ -e "$t" ]; then
+        cat $t | tail -n 8
+    else
+        logger -t gsminfo "No tty $t"
+    fi
+    ;;
+esac
+
+

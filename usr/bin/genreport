@@ -1,0 +1,78 @@
+#!/bin/sh
+## Generate whole system report
+echo "=========="
+echo "FW Version"
+echo "=========="
+cat /etc/version
+echo "======"
+echo "Uptime"
+echo "======"
+uptime
+echo "===="
+echo "Load"
+echo "===="
+top -b -n 1
+echo "========="
+echo "Processes"
+echo "========="
+ps www
+echo "=========="
+echo "System Log"
+echo "=========="
+cat /var/log/messages
+echo "==========="
+echo "DHCP Server"
+echo "==========="
+cat /var/lib/dhcp/dhcpd.leases
+echo "=============="
+echo "OpenVPN Client"
+echo "=============="
+cat /var/log/openvpn.log
+echo "=============="
+echo "OpenVPN Server"
+echo "=============="
+cat /var/log/ovpn-serv.log
+echo "============"
+echo "IPSec Tunnel"
+echo "============"
+cat /var/log/racoon.log
+echo "=========="
+echo "DynDNS Log"
+echo "=========="
+cat /var/log/inadyn.log
+echo "========"
+echo "GSM Info"
+echo "========"
+gsminfo
+echo "=========="
+echo "Interfaces"
+echo "=========="
+ifconfig -a
+echo "======"
+echo "Routes"
+echo "======"
+route -n
+echo "========"
+echo "Iptables"
+echo "========"
+iptables-save
+echo "=========="
+echo "update log"
+echo "=========="
+zcat /dev/mtd2
+
+for f in `ls -1 /mnt/rwfs/settings/`; do
+    echo "====="
+    echo $f
+    echo "====="
+    ext=`echo $f |sed -e 's/^.*\.//'`
+    if [ "$ext" = "gz" ]; then
+        zcat /mnt/rwfs/settings/$f
+    else
+        cat /mnt/rwfs/settings/$f
+    fi
+done
+
+
+## TODO: remove keys, passwords and other private info
+

@@ -1,0 +1,120 @@
+#!/bin/sh
+## configure remote access
+[ -e /mnt/rwfs/settings/settings.remote ] && . /mnt/rwfs/settings/settings.remote
+[ -e /mnt/rwfs/settings/settings.nat ] && . /mnt/rwfs/settings/settings.nat
+[ -e /mnt/rwfs/settings/settings.eth ] && . /mnt/rwfs/settings/settings.eth
+
+
+getiface(){
+    IFACE=ppp0
+    if [ "$ETH_RESERVE" = "1" ] && [ -e "/tmp/reserve" ]; then
+        if [ "`cat /tmp/reserve`" = "eth" ]; then
+            IFACE=$ETH_RESERVE_IFACE
+            ## remove alias number
+            IFACE=`echo $IFACE | sed -e 's/:.*$//'`
+        fi
+    fi
+}
+
+
+start() {
+    getiface
+    if [ "$NAT_DEFAULT_ENABLED" = "1" ]; then
+        ## If we have DMZ, accept on standard port, redirect non-standard, skip if disabled (forward to DMZ).
+        if [ "$REMOTE_HTTP_EXT" = "1" ]; then
+            if [ "$REMOTE_HTTP_EXT_PORT" != "80" ]; then
+                iptables -t nat -A remote -p tcp --dport $REMOTE_HTTP_EXT_PORT -j REDIRECT --to-ports 80
+            else
+                iptables -t nat -A remote -p tcp --dport 80 -j ACCEPT
+            fi
+            iptables -t filter -A remote -p tcp --dport 80 -j ACCEPT
+        fi
+        if [ "$REMOTE_SSH_EXT" = "1" ]; then
+            iptables -t nat -A remote -p tcp --dport $REMOTE_SSH_EXT_PORT -j REDIRECT --to-ports $REMOTE_SSH_PORT
+            iptables -t filter -A remote -p tcp --dport $REMOTE_SSH_PORT -j ACCEPT
+        fi
+        if [ "$REMOTE_TELNET_EXT" = "1" ]; then
+            iptables -t nat -A remote -p tcp --dport $REMOTE_TELNET_EXT_PORT -j REDIRECT --to-ports $REMOTE_TELNET_PORT
+            iptables -t filter -A remote -p tcp --dport $REMOTE_TELNET_PORT -j ACCEPT
+        fi
+        if [ "$REMOTE_SNMP_EXT" = "1" ]; then
+            if [ "$REMOTE_SNMP_EXT_PORT" != "161" ]; then
+                iptables -t nat -A remote -p udp --dport $REMOTE_SNMP_EXT_PORT -j REDIRECT --to-ports 161
+            else
+                iptables -t nat -A remote -p udp --dport 161 -j ACCEPT
+            fi
+            iptables -t filter -A remote -p udp --dport 161 -j ACCEPT
+        fi
+
+    else ## NAT_DEFAULT not enabled
+        ## If no DMZ, skip on standard port, redirect non-standard (and drop standard), drop if disabled.
+        if [ "$REMOTE_HTTP_EXT" = "1" ]; then
+            if [ "$REMOTE_HTTP_EXT_PORT" != "80" ]; then
+                iptables -t nat -A remote -p tcp --dport 80 -j MARK --set-mark 100
+                iptables -t nat -A remote -p tcp --dport $REMOTE_HTTP_EXT_PORT -j REDIRECT --to-ports 80
+            fi
+            iptables -t filter -A remote -p tcp --dport 80 -j ACCEPT
+        else
+            iptables -t filter -A remote -i $IFACE -p tcp --dport 80 -j DROP
+        fi
+        if [ "$REMOTE_SSH_EXT" = "1" ] && [ "$REMOTE_SSH_EXT_PORT" != ""  ]; then
+            if [ "$REMOTE_SSH_EXT_PORT" != "22" ]; then
+                iptables -t nat -A remote -p tcp --dport 22 -j MARK --set-mark 100
+                iptables -t nat -A remote -p tcp --dport $REMOTE_SSH_EXT_PORT -j REDIRECT --to-ports $REMOTE_SSH_PORT
+            fi
+            iptables -t filter -A remote -p tcp --dport $REMOTE_SSH_PORT -j ACCEPT
+        else
+            iptables -t filter -A remote -i $IFACE -p tcp --dport $REMOTE_SSH_PORT -j DROP
+        fi
+        if [ "$REMOTE_TELNET_EXT" = "1" ] && [ "$REMOTE_TELNET_EXT_PORT" != ""  ]; then
+            if [ "$REMOTE_TELNET_EXT_PORT" != "23"  ]; then
+                iptables -t nat -A remote -p tcp --dport 23 -j MARK --set-mark 100
+                iptables -t nat -A remote -p tcp --dport $REMOTE_TELNET_EXT_PORT -j REDIRECT --to-ports $REMOTE_TELNET_PORT
+            fi
+            iptables -t filter -A remote -p tcp --dport $REMOTE_TELNET_PORT -j ACCEPT
+        else
+            iptables -t filter -A remote -i $IFACE -p tcp --dport $REMOTE_TELNET_PORT -j DROP
+        fi
+        if [ "$REMOTE_SNMP_EXT" = "1" ]; then
+            if [ "$REMOTE_SNMP_EXT_PORT" != "161" ]; then
+                iptables -t nat -A remote -p udp --dport 161 -j MARK --set-mark 100
+                iptables -t nat -A remote -p udp --dport $REMOTE_SNMP_EXT_PORT -j REDIRECT --to-ports 161
+            fi
+            iptables -t filter -A remote -p udp --dport 161 -j ACCEPT
+        else
+            iptables -t filter -A remote -i $IFACE -p udp --dport 161 -j DROP
+        fi
+    fi ## NAT_DEFAULT
+
+    ## handle incoming ping
+    iptables -F allow_ping
+    if [ "$REMOTE_ALLOW_PING" = "0" ]; then
+        iptables -A allow_ping -p icmp --icmp-type 8 -j DROP
+    fi
+    iptables -A allow_ping -p icmp -j ACCEPT
+
+}
+
+stop() {
+    iptables -t nat -F remote
+    iptables -t filter -F remote
+    iptables -t filter -F allow_ping
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    *)
+        echo "Usage: $0 (start|restart|stop)"
+        exit 1
+        ;;
+esac
+clear_conntrack &

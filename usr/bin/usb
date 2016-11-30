@@ -1,0 +1,117 @@
+#!/bin/sh
+# check and mount/unmount usb drive
+
+_mount() {
+    echo -n "Mounting USB drive... "
+    HOST=/sys/bus/usb/devices/1-2/1-2\:1.0
+    [ ! -d $HOST ] && echo "No drive attached!" && exit 1
+    NUM=`stat -c '%n' ${HOST}/host* | sed 's/.*host//'`
+    DEV=`ls ${HOST}/host$NUM/target$NUM\:0\:0/$NUM\:0\:0\:0/block/`
+    PART=${HOST}/host$NUM/target$NUM\:0\:0/$NUM\:0\:0\:0/block/$DEV/${DEV}1
+    if [ -d $PART ]; then
+        mount /dev/${DEV}1 /mnt/usb -t vfat 2>&1 1>/dev/null
+        res=$?
+    else
+        mount /dev/$DEV /mnt/usb -t vfat 2>&1 1>/dev/null
+        res=$?
+    fi
+}
+
+_umount() {
+    echo "Unmounting USB drive... "
+    /etc/init.d/syslog stop
+    umount /mnt/usb
+    res=$?
+    /etc/init.d/syslog start
+}
+
+_status() {
+    echo -n "Checking if USB is mounted... "
+    mnt=`mount | grep /mnt/usb`
+    if [ -n "$mnt" ]; then
+        echo "it is"
+        exit 0
+    else
+        echo "it is NOT"
+        exit 1
+    fi
+}
+
+_check() {
+    echo -n "Checking if USB drive attached... "
+    HOST=/sys/bus/usb/devices/1-2/1-2\:1.0
+    NUM=`stat -c '%n' ${HOST}/host* | sed 's/.*host//'`
+    DEV=`ls ${HOST}/host$NUM/target$NUM\:0\:0/$NUM\:0\:0\:0/block/`
+    if [ -d "${HOST}/host$NUM/target$NUM:0:0/$NUM:0:0:0/block/$DEV" ]; then
+        echo "it is"
+        exit 0
+    else
+        echo "it is NOT"
+        exit 1
+    fi
+}
+
+_on() {
+    echo 1 > /sys/bus/usb/drivers_autoprobe
+    sleep 1
+    echo 1 > /sys/class/gpio/USB_POWER/value
+}
+
+_off() {
+    [ -e /sys/bus/usb/devices/1-2/remove ] && echo 1 > /sys/bus/usb/devices/1-2/remove
+    sleep 1
+    echo 0 > /sys/class/gpio/USB_POWER/value
+}
+case $1 in
+    mount)
+        _mount
+        ;;
+    umount)
+        _umount
+        ;;
+    status)
+        _status
+        ;;
+    check)
+        _check
+        ;;
+    on)
+        . /etc/version
+        case "$MODEL" in
+            RUH2b|RUH3|RUHm|RUH2m)
+                _on
+                exit 0
+                ;;
+            *)
+                echo "Not supported on this model"
+                exit 1
+                ;;
+        esac
+        ;;
+    off)
+        . /etc/version
+        case "$MODEL" in
+            RUH2b|RUH3|RUHm|RUH2m)
+                _off
+                exit 0
+                ;;
+            *)
+                echo "Not supported on this model"
+                exit 1 
+                ;;
+        esac
+        ;;
+    *)
+        echo "Usage: $0 (mount|umount|status|check|on|off)"
+        exit 1
+        ;;
+esac
+
+if [ "$res" = "0" ]; then
+    echo "Done"
+else
+    echo "Failed"
+fi
+
+exit $res
+

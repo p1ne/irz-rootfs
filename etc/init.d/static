@@ -1,0 +1,61 @@
+#!/bin/sh
+CONF=/mnt/rwfs/settings/settings.static
+
+action(){
+    if [ "$1" = "start" ]; then
+        cmd="add"
+        echo "Starting static routes"
+    elif [ "$1" = "stop" ]; then
+        cmd="del"
+        echo "Stopping static routes"
+    else
+        res=1
+        break
+    fi
+    [ -f $CONF ] && . $CONF
+    for i in `seq 10`; do
+        eval NETWORK="$"STATIC_NETWORK${i}
+        eval NETMASK="$"STATIC_NETMASK${i}
+        eval GATEWAY="$"STATIC_GATEWAY${i}
+        eval DEVICE="$"STATIC_DEVICE${i}
+        if [ -n "$NETWORK" ] && [ -n "$NETMASK" ]; then
+            if [ -n "$DEVICE" ] ||  [ -n "$GATEWAY" ]; then
+                if [ -n "$DEVICE" ]; then
+                    DEV="dev $DEVICE"
+                else
+                    DEV=""
+                fi
+                if [ -n "$GATEWAY" ]; then
+                    GW="gw $GATEWAY"
+                else
+                    GW=""
+                fi
+                route $cmd -net $NETWORK netmask $NETMASK $GW $DEV
+            fi
+        fi
+    done
+}
+
+usage(){
+    echo "$0 (start|stop|restart)"
+}
+
+case $1 in
+    start)
+        action start
+        exit $res
+        ;;
+    stop)
+        action stop
+        exit $res
+        ;;
+    restart)
+        action stop
+        action start
+        exit $res
+        ;;
+    *)
+        usage
+        ;;
+esac
+        

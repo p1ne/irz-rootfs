@@ -1,0 +1,235 @@
+#!/bin/sh
+
+[ -e /mnt/rwfs/settings/settings.eth ] && . /mnt/rwfs/settings/settings.eth
+[ -e /mnt/rwfs/settings/settings.nat ] && . /mnt/rwfs/settings/settings.nat
+
+getiface(){
+    EXTIF=ppp0
+    if [ "$ETH_RESERVE" = "1" ] && [ -e "/tmp/reserve" ]; then
+        if [ "`cat /tmp/reserve`" = "eth" ]; then
+            EXTIF=$ETH_RESERVE_IFACE
+            ## remove alias number
+            EXTIF=`echo $EXTIF | sed -e 's/:.*$//'`
+        else
+            EXTIF=ppp0
+        fi
+    fi
+}
+
+start(){
+    getiface
+    echo -n "Starting iptables: "
+    echo 1 > /proc/sys/net/ipv4/ip_forward
+    
+    ## clean chains
+    iptables -F INPUT
+    iptables -F FORWARD
+    iptables -F OUTPUT
+    ## create default rules
+    iptables -A INPUT -i lo -j ACCEPT  ## accept all on lo
+    iptables -A OUTPUT -o lo -j ACCEPT ##
+    iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT  ## allow established
+    iptables -A INPUT -i eth0 -j ACCEPT  ## allow all from LAN
+    iptables -A INPUT -m mark --mark 100 -j DROP  ## drop disabled remote access
+    iptables -A FORWARD -p icmp -j ACCEPT  ## allow transit icmp
+    ## set default policy
+    iptables -P INPUT DROP
+    iptables -P FORWARD ACCEPT
+    iptables -P OUTPUT ACCEPT
+
+    ## upnp, jumps added on restart in ext if section
+    iptables -t nat -N MINIUPNPD
+    iptables -t filter -N MINIUPNPD
+
+    ## gre
+    iptables -t filter -N gre
+    iptables -t filter -A INPUT -j gre
+
+    ## serial/tty2net
+    iptables -t filter -N tty2net232
+    iptables -t filter -A INPUT -j tty2net232
+    iptables -t filter -N tty2net485
+    iptables -t filter -A INPUT -j tty2net485
+
+    ## ipsec
+    iptables -t filter -N ipsec
+    iptables -t filter -A INPUT -j ipsec
+    iptables -t nat -N ipsec_dntmasq
+    iptables -t nat -A POSTROUTING -j ipsec_dntmasq
+    
+    ## openvpn
+    # allow
+    iptables -t filter -N ovpn 
+    iptables -t filter -A INPUT -j ovpn
+    # nat
+    iptables -t nat -N ovpn_nat 
+    iptables -t nat -A PREROUTING -j ovpn_nat
+    # masq
+    iptables -t nat -N ovpn_masq
+    iptables -t nat -A POSTROUTING -j ovpn_masq
+    
+    ## ovpns
+    iptables -t filter -N ovpns
+    iptables -t filter -A INPUT -j ovpns
+    
+    ## l2tp
+    iptables -t filter -N l2tp
+    iptables -t filter -A INPUT -j l2tp
+    
+    ## remote
+    iptables -t filter -N remote
+    iptables -t filter -A INPUT ! -i eth0 -j remote
+    iptables -t nat -N remote
+    iptables -t nat -A PREROUTING ! -i eth0 -j remote
+        
+    ## fw
+    iptables -t filter -N fw
+    iptables -t filter -A FORWARD -j fw
+    # final rule?
+
+    ## ovpn_dmz
+    iptables -t nat -N ovpn_dmz
+    iptables -t nat -A PREROUTING -j ovpn_dmz
+    
+    ## ipsec_dmz
+    iptables -t nat -N ipsec_dmz
+    iptables -t nat -A PREROUTING -j ipsec_dmz
+    
+    ## pfwd
+    iptables -t nat -N pfwd
+    ## -j pfwd added in nat_pre_ext
+
+    ## allow ping
+    iptables -t filter -N allow_ping
+    ## -j allow_ping added in flt_inp_ext
+
+    ## rules that depend on ext if
+    iptables -t nat -N nat_pre_ext
+    iptables -t nat -A PREROUTING -j nat_pre_ext
+    iptables -t nat -N nat_pst_ext
+    iptables -t nat -A POSTROUTING -j nat_pst_ext
+    iptables -t filter -N flt_fwd_ext
+    iptables -t filter -A FORWARD -j flt_fwd_ext
+    iptables -t filter -N flt_inp_ext
+    iptables -t filter -A INPUT -j flt_inp_ext
+
+    ## clear conntrack
+    clear_conntrack &
+    echo "done"
+}
+
+
+
+stop(){
+    echo -n "Stopping iptables: "
+    getiface
+
+    ## miniupnpd
+    iface=`iptables-save | grep MINIUPNPD | grep FORWARD | awk '{print $4}'`
+    if [ -n "$iface" ]; then
+        iptables -t nat -D PREROUTING -i $iface -j MINIUPNPD
+        iptables -t filter -D FORWARD -i $iface ! -o $iface -j MINIUPNPD
+        iptables -t filter -F MINIUPNPD
+        iptables -t filter -X MINIUPNPD
+        iptables -t nat -F MINIUPNPD
+        iptables -t nat -X MINIUPNPD
+    fi
+
+    ## l2tp
+    iptables -t filter -F l2tp
+    iptables -t filter -D INPUT -j l2tp
+    iptables -t filter -X l2tp
+
+    ## pfdw
+    iptables -t nat -F pfwd
+    iptables -t nat -F PREROUTING
+    iptables -t nat -X pfwd
+
+    ## masq
+    iptables -t nat -F POSTROUTING
+    iptables -t nat -F OUTPUT
+
+    ## ipsec
+    iptables -t filter -F ipsec
+    iptables -t filter -D INPUT -j ipsec
+    iptables -t filter -X ipsec
+
+    ## ovpn
+    iptables -t filter -F ovpn
+    iptables -t filter -D INPUT -j ovpn
+    iptables -t filter -X ovpn
+
+    ## fw
+    iptables -t filter -F fw
+    iptables -t filter -D FORWARD -j fw
+    iptables -t filter -X fw
+    
+    ## default
+    iptables -t filter -F INPUT
+    iptables -t filter -P INPUT ACCEPT
+    iptables -t filter -F FORWARD
+    iptables -t filter -P FORWARD ACCEPT
+    iptables -t filter -F OUTPUT
+    iptables -t filter -P OUTPUT ACCEPT
+
+    echo "done"
+}
+
+## restart should only update rules related to ext if
+restart() {
+echo -n "Restarting iptables: "
+
+iptables -t nat -F nat_pre_ext
+iptables -t nat -F nat_pst_ext
+iptables -t filter -F flt_fwd_ext
+iptables -t filter -F flt_inp_ext
+getiface
+
+## upnp
+iptables -t nat -A nat_pre_ext -i $EXTIF -j MINIUPNPD
+iptables -t filter -A flt_fwd_ext -i $EXTIF ! -o $EXTIF -j MINIUPNPD
+
+## configure masquerading
+if [ "$NAT_DISABLE_MASQ" = "0" ]; then
+    ## leave ipsec untouched
+    for i in `seq 5` ; do
+        eval EN="$"IPSEC${i}_ENABLED
+        if [ "$EN" = "1" ]; then
+            eval NETW="$"IPSEC${i}_REMOTE_NETWORK
+            eval MASK="$"IPSEC${i}_REMOTE_NETMASK
+            iptables -t nat -A  nat_pst_ext -o $EXTIF -d $NETW/$MASK -j ACCEPT
+        fi
+    done
+    ## masquerade remaining outgoing traffic
+    iptables -t nat -A nat_pst_ext -o $EXTIF -j MASQUERADE
+fi
+
+## pfwd
+iptables -t nat -A nat_pre_ext -i $EXTIF -j pfwd
+
+## allow ping
+iptables -A flt_inp_ext -p icmp -j allow_ping
+
+clear_conntrack &
+echo "done"
+}
+
+
+case "$1" in
+    start)
+        start
+        [ -x /mnt/rwfs/settings/iptables.user ] && /mnt/rwfs/settings/iptables.user start &
+        ;;
+    stop)
+        stop
+        [ -x /mnt/rwfs/settings/iptables.user ] && /mnt/rwfs/settings/iptables.user stop &
+        ;;    
+    restart)
+        restart
+        [ -x /mnt/rwfs/settings/iptables.user ] && /mnt/rwfs/settings/iptables.user restart &
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+    ;;
+esac

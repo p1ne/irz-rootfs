@@ -1,0 +1,48 @@
+#!/bin/sh
+## turn gsm modem on or off
+## PORT TYPE    DESCRIPTION     ACTIVE
+## -----------------------------------
+## PA24  out     gsm power on    low
+
+case "$1" in
+    on)
+        rm -f /dev/modem
+        rm -f /dev/stat
+        echo 0 > /sys/class/gpio/GSM_POWER/value
+        led wl_low 0
+        led wl_high 0
+        led csq_low 0
+        led csq_high 0
+        sleep 10
+        [ -e /tmp/debug ] && FLAGS=-vv
+        gsminfod $FLAGS
+        sleep 2
+        tty-lock modem
+        talk -t /dev/modem -c '+CPMS="ME","ME","ME"' >/dev/null
+        tty-unlock modem
+        logger -t modem -p daemon.info "Modem ON"
+        ;;
+    off)
+        if [ -e /dev/modem ]; then
+            modem_locked="y"
+            tty-lock modem
+        fi
+        led wl_low 0
+        led wl_high 0
+        led csq_low 0
+        led csq_high 0
+        killall gsminfod
+        rm -f /dev/modem
+        rm -f /dev/stat
+        echo 1 > /sys/bus/usb/devices/1-1/remove
+        echo 1 > /sys/class/gpio/GSM_POWER/value
+        if [ "$modem_locked" = "y" ]; then
+            tty-unlock modem
+        fi
+        logger -t modem -p daemon.info "Modem OFF"
+        ;;
+    *)
+        echo "Usage: $0 {on|off}"
+        exit 1
+esac
+

@@ -1,0 +1,23 @@
+#!/bin/sh
+F=/mnt/rwfs/settings/settings.smtd
+[ -f "$F" ] && . $F
+case "$1" in
+  start)
+    echo -n "Starting smtd: "
+    /usr/bin/smtd /dev/modem $SMTD_PARAMS
+    RETVAL=$?
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+    exit $RETVAL
+    ;;
+  stop)
+    echo -n "Stopping smtd: "
+    killall smtd 2>/dev/null
+    RETVAL=$?
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+    exit $RETVAL
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+esac
+

@@ -1,0 +1,67 @@
+#!/bin/sh
+# $1 - ip address
+# $2 - mask
+# $3 - ping interval
+
+## Check params or use defaults
+if [ -z "$1" ] || [ -z "$2" ]; then
+    if [ -f /mnt/rwfs/settings/settings.eth ]; then
+        . /mnt/rwfs/settings/settings.eth
+        IP=$ETH_IPADDR
+        MASK=$ETH_MASK
+    else
+        IP=192.168.1.1
+        MASK=255.255.255.0
+    fi
+else
+    IP=$1
+    MASK=$2
+fi
+
+
+[ -z "$3" ] && int=1 || int=$3
+
+f=/tmp/pinger
+echo `ipcalc -np $IP $MASK` > $f
+. $f
+rm $f
+
+a=`echo $NETWORK | cut -d "." -f 1`
+b=`echo $NETWORK | cut -d "." -f 2`
+c=`echo $NETWORK | cut -d "." -f 3`
+d=`echo $NETWORK | cut -d "." -f 4`
+
+let "count=( 0xffffffff - (0xffffffff << (32 - $PREFIX)) ) - 1"
+
+## Ping all subnet
+al=0
+tl=0
+for host in `seq 0 $count`;
+do
+    let "d+=1"
+    ping -W$int -c1 $a.$b.$c.$d > /dev/null
+    if [ "$?" = "0" ]; then
+        echo "Host $a.$b.$c.$d - alive"
+        al=$(( al + 1))
+    else
+        echo "Host $a.$b.$c.$d - dead"
+    fi
+    tl=$(( tl + 1 ))
+    if [ "$d" = "255" ]; then
+        d=0
+        let "c+=1"
+    fi
+
+    if [ "$c" = "256" ]; then
+        c=0
+        let "b+=1"
+    fi
+
+    if [ "$b" = "256" ]; then
+        b=0
+        let "a+=1"
+    fi
+done
+echo "Alive: $al"
+echo "Total: $tl"
+

@@ -1,0 +1,85 @@
+#!/bin/sh
+
+VRRP_CONFIG=/var/etc/vrrp.conf
+[ -e "/mnt/rwfs/settings/settings.vrrp" ] && . /mnt/rwfs/settings/settings.vrrp
+
+start(){
+    echo -n "Starting VRRP service..."
+    if [ "$VRRP_ENABLE" != "1" ]; then 
+        echo "skipped"
+        exit 0
+    fi
+    configure
+    keepalived --vrrp -f $VRRP_CONFIG
+    [ "$?" = "0" ] && echo "done" || echo "failed"
+}
+
+configure(){
+    password=`decode $VRRP_PASSWORD`
+    ## prepare config file
+    echo "global_defs {" > $VRRP_CONFIG
+    if [ ! -z "$VRRP_EMAIL" ]; then
+        echo "  notification_email {"  >> $VRRP_CONFIG
+        echo "    $VRRP_EMAIL"  >> $VRRP_CONFIG
+        echo "  }"  >> $VRRP_CONFIG
+    fi    
+    
+    if [ -n "$VRRP_SRV_MAIL" ] && [ -n "$VRRP_SMTP" ]; then
+        echo "  notification_email_from $VRRP_SRV_MAIL"  >> $VRRP_CONFIG
+        echo "  smtp_server $VRRP_SMTP"  >> $VRRP_CONFIG
+        echo "  smtp_connect_timeout 30"  >> $VRRP_CONFIG
+    fi
+    echo "}"  >> $VRRP_CONFIG
+ 
+    echo "vrrp_instance $VRRP_INSTANCE {"  >> $VRRP_CONFIG
+    echo "  state MASTER"  >> $VRRP_CONFIG
+    echo "  interface eth0"  >> $VRRP_CONFIG
+    echo "  virtual_router_id $VRRP_ROUTER_ID"  >> $VRRP_CONFIG
+    echo "  priority $VRRP_PRIORITY" >> $VRRP_CONFIG
+    echo "  advert_int 1"  >> $VRRP_CONFIG
+    
+    if [ -n "$VRRP_SRV_MAIL" ] && [ -n "$VRRP_SMTP" ]; then
+        echo " smtp_alert"  >> $VRRP_CONFIG
+    fi  
+    
+    if [ "$VRRP_AUTH" != "none" ]; then
+        echo "  authentication {" >> $VRRP_CONFIG
+        echo "    auth_type $VRRP_AUTH"  >> $VRRP_CONFIG
+        echo "    auth_pass $password"  >> $VRRP_CONFIG
+        echo "  }" >> $VRRP_CONFIG
+    fi
+    echo "  virtual_ipaddress {" >> $VRRP_CONFIG
+    echo "    $VRRP_IP" >> $VRRP_CONFIG
+    echo "  }" >> $VRRP_CONFIG
+
+    ## scripts
+    [ -x /mnt/rwfs/settings/vrrp.master ] && echo "  notify_master /mnt/rwfs/settings/vrrp.master" >> $VRRP_CONFIG
+    [ -x /mnt/rwfs/settings/vrrp.backup ] && echo "  notify_backup /mnt/rwfs/settings/vrrp.backup" >> $VRRP_CONFIG
+    [ -x /mnt/rwfs/settings/vrrp.fault ]  && echo "  notify_fault  /mnt/rwfs/settings/vrrp.fault"  >> $VRRP_CONFIG
+    [ -x /mnt/rwfs/settings/vrrp.notify ] && echo "  notify        /mnt/rwfs/settings/vrrp.notify" >> $VRRP_CONFIG
+
+    echo "}" >> $VRRP_CONFIG
+    echo "" >> $VRRP_CONFIG
+}
+
+stop(){
+    echo -n "Stopping VRRP service..."
+    killall keepalived
+    echo "done"
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    configure|config)
+        configure
+        ;;
+esac

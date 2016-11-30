@@ -1,0 +1,41 @@
+#!/bin/sh
+## configure dmz bypass for openvpn
+[ -e /mnt/rwfs/settings/settings.nat ] && . /mnt/rwfs/settings/settings.nat
+[ -e /mnt/rwfs/settings/settings.openvpn ] && . /mnt/rwfs/settings/settings.openvpn
+
+start() {
+    if [ "$NAT_DEFAULT_ENABLED" = "1" ]; then
+        ## If we have DMZ, accept on standard port, redirect non-standard, skip if disabled (forward to DMZ).
+        iptables -t nat -F ovpn_dmz
+        if [ "$OPENVPN_ENABLED" = "1" ]; then
+            if [ -z "$OPENVPN_PROTO" ] || [ "$OPENVPN_PROTO" = "tcp-client" ] || [ "$OPENVPN_PROTO" = "tcp-server" ]; then
+                iptables -t nat -A ovpn_dmz -p tcp -m tcp --dport $OPENVPN_PORT -j ACCEPT
+            else
+                iptables -t nat -A ovpn_dmz -p udp -m udp --dport $OPENVPN_PORT -j ACCEPT
+            fi
+        fi
+    fi 
+}
+
+stop() {
+    iptables -t nat -F ovpn_dmz
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    *)
+        echo "Usage: $0 (start|restart|stop)"
+        exit 1
+        ;;
+esac
+clear_conntrack &
+

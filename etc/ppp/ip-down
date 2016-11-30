@@ -1,0 +1,53 @@
+#!/bin/sh
+#       $1      the interface name used by pppd (e.g. ppp3)
+#       $2      the tty device name
+#       $3      the tty device speed
+#       $4      the local IP address for the interface
+#       $5      the remote IP address
+#       $6      the parameter specified by the 'ipparam' option to pppd
+# Variables:
+# CONNECT_TIME  The number of seconds from when the PPP negotiation started until the connection was terminated.
+# BYTES_SENT    The number of bytes sent (at the level of the serial port) during the connection.
+# BYTES_RCVD    The number of bytes received (at the level of the serial port) during the connection.
+# LINKNAME  The logical name of the link, set with the linkname option.
+# CALL_FILE The value of the call option.
+# DNS1      If the peer supplies DNS server addresses, this variable is set to the first DNS server address supplied.
+# DNS2      If the peer supplies DNS server addresses, this variable is set to the second DNS server address supplied.
+trap "logger -t ip-down 'SIGTERM IGNORED'" SIGTERM
+PID=/var/run/ppp_ip.pid
+echo $$ > $PID
+IFACE=$1
+USER=/mnt/rwfs/settings/ipdown
+
+if [ "$IFACE" = "ppp0" ]; then
+    rm /var/ppp/ip
+    rm /var/ppp/remoteip
+    [ -f /tmp/pingcount ] && rm /tmp/pingcount
+    ## stop services
+    ## Do not restart services if reserve over eth active
+    ## remove default route only if not on wire link
+    [ -f /tmp/reserve ] && iface=`cat /tmp/reserve`
+    ## remove default route only if not on wire link
+    if [ "$iface" != "eth" ]; then
+        netservices stop
+        defif=`route -n|grep '^0.0.0.0'|awk '{print $8}'`
+        if [ "$defif" = "$IFACE" ]; then
+            ##remove only our default route
+            route del default
+            logger -t $0 "Removed default gw"
+        fi
+    fi
+    [ -x /etc/init.d/sms ] && /etc/init.d/sms disconnect
+    echo "" > /etc/resolv.conf
+    ## save connections log
+    /etc/init.d/connection disconnected $CONNECT_TIME $BYTES_SENT $BYTES_RCVD
+    [ -x $USER ] && $USER &
+fi
+if [ "$IFACE" = "ppp10" ]; then
+    [ -x /mnt/rwfs/settings/ipdown.l2tp ] && /mnt/rwfs/settings/ipdown.l2tp
+fi
+if [ "$IFACE" = "ppp11" ]; then
+    [ -x /mnt/rwfs/settings/ipdown.pptp ] && /mnt/rwfs/settings/ipdown.pptp
+fi
+rm $PID
+touch /var/run/$1.pid

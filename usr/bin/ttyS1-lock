@@ -1,0 +1,2 @@
+#!/bin/sh
+lockfile-create --retry 5 /var/lock/ttyS1

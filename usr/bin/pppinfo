@@ -1,0 +1,38 @@
+#!/bin/sh
+#parse and show interface stats
+
+# Default interface
+IFACE=$1
+[ -z "$IFACE" ] && IFACE="ppp0"
+ 
+tx=`cat /proc/net/dev|grep $IFACE|cut -d: -f 2-|awk '{print $9}'`
+if [ "$tx" = "0" ] || [ "$tx" = "" ]; then
+    echo "Transmit: 0 bytes"
+else
+    echo "Transmit: "`byteconv $tx`
+fi
+
+rx=`cat /proc/net/dev|grep $IFACE|cut -d: -f 2-|awk '{print $1}'`
+if [ "$rx" = "0" ] || [ "$rx" = "" ]; then
+    echo "Received: 0 bytes"
+else
+    echo "Received: "`byteconv $rx`
+fi
+
+if [ "$IFACE" = "ppp0" ]; then
+    if [ -e /var/ppp/ip ]; then
+        OLD=`stat -c "%Y" /var/ppp/ip`
+        NEW=`date +%s`
+        if [ -n "$OLD" ]; then
+            DIFF=$(( NEW - OLD ))
+            if [ -n "$DIFF" ]; then
+                echo "Duration: "`timeconv $DIFF`
+            fi
+        fi
+    fi
+    ipaddr=`ifconfig $IFACE|grep "inet addr:"| sed -e 's/^.*addr://' |awk '{print $1}'`
+    [ -n "$ipaddr" ] && ippub="(`ipaddress $ipaddr`)"
+    [ -z "$ipaddr" ] && ipaddr="Unknown"
+    echo "IP Address: $ipaddr $ippub"
+fi
+

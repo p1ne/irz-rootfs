@@ -1,0 +1,58 @@
+#!/bin/sh
+[ -e /mnt/rwfs/settings/settings.eth ] && . /mnt/rwfs/settings/settings.eth
+
+case "$1" in
+  start)
+    echo -n "Configuring dhcpd: "
+    [ -f /mnt/rwfs/etc/dhcpd.conf ] && rm /mnt/rwfs/etc/dhcpd.conf
+    if [ "$ETH_DHCP_ENABLED" = "0" ]; then
+        echo "Skipped"
+        exit 0
+    fi
+    if [ -z "$ETH_IPADDR" ] || [ -z "$ETH_NETMASK" ]; then
+        ETH_IPADDR="192.168.1.1"
+        ETH_NETMASK="255.255.255.0"
+        ETH_SUBNET="192.168.1.0"
+    fi
+    #rewrite dhcpd config
+    [ -z "$ETH_DHCP_DEF" ] && ETH_DHCP_DEF=3600
+    [ -z "$ETH_DHCP_MAX" ] && ETH_DHCP_MAX=86400
+    ETH_SUBNET=`ipcalc -n $ETH_IPADDR $ETH_NETMASK | sed -e 's/NETWORK=//'`
+    echo "" > /etc/dhcpd.conf
+    echo "ddns-update-style none;" >> /etc/dhcpd.conf
+    echo "default-lease-time $ETH_DHCP_DEF;" >> /etc/dhcpd.conf
+    echo "max-lease-time $ETH_DHCP_MAX;" >> /etc/dhcpd.conf
+    echo "option routers "$ETH_IPADDR";" >> /etc/dhcpd.conf
+    echo "option subnet-mask "$ETH_NETMASK";" >> /etc/dhcpd.conf
+    echo "option domain-name-servers "$ETH_IPADDR";" >> /etc/dhcpd.conf
+    echo "subnet "$ETH_SUBNET" netmask "$ETH_NETMASK" {" >> /etc/dhcpd.conf
+    echo "    range "$ETH_DHCP_POOL_LO" "$ETH_DHCP_POOL_HI";" >> /etc/dhcpd.conf
+    echo "}" >> /etc/dhcpd.conf
+    echo "" >> /etc/dhcpd.conf
+    
+    if [ "$ETH_DHCP_STATIC" = "1" ]; then
+        for i in 1 2 3 4 5
+        do
+        name=`eval "echo \\$ETH_DHCP_NAME${i}"`
+        mac=`eval "echo \\$ETH_DHCP_MAC${i}"`
+        ip=`eval "echo \\$ETH_DHCP_IP${i}"`
+        
+        [ -z "$name" ] || [ -z "$mac" ] || [ -z "$ip" ] && continue
+        
+        echo "host $name {" >> /etc/dhcpd.conf
+        echo "hardware ethernet ${mac};" >> /etc/dhcpd.conf
+        echo "fixed-address ${ip};" >> /etc/dhcpd.conf
+        echo "}" >> /etc/dhcpd.conf
+        echo "" >> /etc/dhcpd.conf
+        done
+    fi
+    echo "done"
+    ;;
+  stop)
+  ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac
+

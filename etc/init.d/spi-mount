@@ -1,0 +1,26 @@
+#!/bin/sh
+
+if [ -e "/dev/mtdblock8" ]; then
+    mkdir -p /var/mnt/spi
+    mount -t jffs2 /dev/mtdblock8 /var/mnt/spi -o rw
+    
+    if [ "$?" != "0" ]; then
+	echo -n "Erasing spi-flash: "
+    	flash_erase -jq /dev/mtd8 0 0
+    	if [ ! "$?" = "0" ]; then
+	        logger -t spi-mount "flash_erase failed!"
+	        echo "failed"
+	        exit -1
+    	fi
+    	echo "Done"
+    	
+    	echo -n "Mounting spi-flash: "
+	mount -t jffs2 /dev/mtdblock8 /var/mnt/spi -o rw
+    	if [ ! "$?" = "0" ]; then
+	        logger -t spi-mount "mount failed!"
+	        echo "failed"
+	        exit -2
+    	fi
+    	echo "Done"
+    fi
+fi

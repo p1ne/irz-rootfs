@@ -1,0 +1,213 @@
+#!/bin/sh
+
+[ -e /mnt/rwfs/settings/settings.gre ] && . /mnt/rwfs/settings/settings.gre
+[ -e /mnt/rwfs/settings/settings.eth ] && . /mnt/rwfs/settings/settings.eth
+
+T=$2
+[ -z $T ] && T="*"
+
+start(){
+        echo -n "Starting GRE tunnel #$T: "
+### 01
+        if [ "$T" = "01" ] || [ "$T" = "*" ] && [ "$GRE01_ENABLED" = "1" ] && [ -n "$GRE01_REMOTE_NETWORK" ] && [ -n "$GRE01_REMOTE_NETMASK" ]; then
+            [ -n "$GRE01_TUNNEL_MTU" ] && MTU01="mtu $GRE01_TUNNEL_MTU"
+            ip tunnel add gre1 mode gre remote $GRE01_REMOTE_IPADDR 2> /dev/null
+            ip link set gre1 up $MTU01 2> /dev/null
+            [ -z "$GRE01_SRC_IPADDR" ] && GRE01_SRC_IPADDR=$ETH_IPADDR
+            if [ -z "$GRE01_DST_IPADDR" ]; then
+                ip addr add $GRE01_SRC_IPADDR dev gre1 2> /dev/null
+            else
+                ip addr add $GRE01_SRC_IPADDR peer $GRE01_DST_IPADDR dev gre1 2> /dev/null
+                [ -n "$GRE01_TUNNEL_MASK" ] && ifconfig gre1 $GRE01_SRC_IPADDR netmask $GRE01_TUNNEL_MASK pointopoint $GRE01_DST_IPADDR
+            fi
+            route add -net $GRE01_REMOTE_NETWORK netmask $GRE01_REMOTE_NETMASK dev gre1 2> /dev/null
+        fi
+### 02
+        if [ "$T" = "02" ] || [ "$T" = "*" ] && [ "$GRE02_ENABLED" = "1" ] && [ -n "$GRE02_REMOTE_NETWORK" ] && [ -n "$GRE02_REMOTE_NETMASK" ]; then
+            [ -n "$GRE02_TUNNEL_MTU" ] && MTU02="mtu $GRE02_TUNNEL_MTU"
+            ip tunnel add gre2 mode gre remote $GRE02_REMOTE_IPADDR 2> /dev/null
+            ip link set gre2 up $MTU02 2> /dev/null
+            [ -n "$GRE02_TUNNEL_MASK" ] && ifconfig gre2 netmask $GRE02_TUNNEL_MASK
+            [ -z "$GRE02_SRC_IPADDR" ] && GRE02_SRC_IPADDR=$ETH_IPADDR
+            if [ -z "$GRE02_DST_IPADDR" ]; then
+                ip addr add $GRE02_SRC_IPADDR dev gre2 2> /dev/null
+            else
+                ip addr add $GRE02_SRC_IPADDR peer $GRE02_DST_IPADDR dev gre2 2> /dev/null
+                [ -n "$GRE02_TUNNEL_MASK" ] && ifconfig gre2 $GRE02_SRC_IPADDR netmask $GRE02_TUNNEL_MASK pointopoint $GRE02_DST_IPADDR
+            fi
+            route add -net $GRE02_REMOTE_NETWORK netmask $GRE02_REMOTE_NETMASK dev gre2 2> /dev/null
+        fi
+### 03
+        if [ "$T" = "03" ] || [ "$T" = "*" ] && [ "$GRE03_ENABLED" = "1" ] && [ -n "$GRE03_REMOTE_NETWORK" ] && [ -n "$GRE03_REMOTE_NETMASK" ]; then
+            [ -n "$GRE03_TUNNEL_MTU" ] && MTU03="mtu $GRE03_TUNNEL_MTU"
+            ip tunnel add gre3 mode gre remote $GRE03_REMOTE_IPADDR 2> /dev/null
+            ip link set gre3 up $MTU03 2> /dev/null
+            [ -n "$GRE03_TUNNEL_MASK" ] && ifconfig gre3 netmask $GRE03_TUNNEL_MASK
+            [ -z "$GRE03_SRC_IPADDR" ] && GRE03_SRC_IPADDR=$ETH_IPADDR
+            if [ -z "$GRE03_DST_IPADDR" ]; then
+                ip addr add $GRE03_SRC_IPADDR dev gre3 2> /dev/null
+            else
+                ip addr add $GRE03_SRC_IPADDR peer $GRE03_DST_IPADDR dev gre3 2> /dev/null
+                [ -n "$GRE03_TUNNEL_MASK" ] && ifconfig gre3 $GRE03_SRC_IPADDR netmask $GRE03_TUNNEL_MASK pointopoint $GRE03_DST_IPADDR
+            fi
+            route add -net $GRE03_REMOTE_NETWORK netmask $GRE03_REMOTE_NETMASK dev gre3 2> /dev/null
+        fi
+### 04
+        if [ "$T" = "04" ] || [ "$T" = "*" ] && [ "$GRE04_ENABLED" = "1" ] && [ -n "$GRE04_REMOTE_NETWORK" ] && [ -n "$GRE04_REMOTE_NETMASK" ]; then
+            [ -n "$GRE04_TUNNEL_MTU" ] && MTU04="mtu $GRE04_TUNNEL_MTU"
+            ip tunnel add gre4 mode gre remote $GRE04_REMOTE_IPADDR 2> /dev/null
+            ip link set gre4 up $MTU04 2> /dev/null
+            [ -n "$GRE04_TUNNEL_MASK" ] && ifconfig gre4 netmask $GRE04_TUNNEL_MASK
+            [ -z "$GRE04_SRC_IPADDR" ] && GRE04_SRC_IPADDR=$ETH_IPADDR
+            if [ -z "$GRE04_DST_IPADDR" ]; then
+                ip addr add $GRE04_SRC_IPADDR dev gre4 2> /dev/null
+            else
+                ip addr add $GRE04_SRC_IPADDR peer $GRE04_DST_IPADDR dev gre4 2> /dev/null
+                [ -n "$GRE04_TUNNEL_MASK" ] && ifconfig gre4 $GRE04_SRC_IPADDR netmask $GRE04_TUNNEL_MASK pointopoint $GRE04_DST_IPADDR
+            fi
+            route add -net $GRE04_REMOTE_NETWORK netmask $GRE04_REMOTE_NETMASK dev gre4 2> /dev/null
+        fi
+### 05
+        if [ "$T" = "05" ] || [ "$T" = "*" ] && [ "$GRE05_ENABLED" = "1" ] && [ -n "$GRE05_REMOTE_NETWORK" ] && [ -n "$GRE05_REMOTE_NETMASK" ]; then
+            [ -n "$GRE05_TUNNEL_MTU" ] && MTU05="mtu $GRE05_TUNNEL_MTU"
+            ip tunnel add gre5 mode gre remote $GRE05_REMOTE_IPADDR 2> /dev/null
+            ip link set gre5 up $MTU05 2> /dev/null
+            [ -n "$GRE05_TUNNEL_MASK" ] && ifconfig gre5 netmask $GRE05_TUNNEL_MASK
+            [ -z "$GRE05_SRC_IPADDR" ] && GRE05_SRC_IPADDR=$ETH_IPADDR
+            if [ -z "$GRE05_DST_IPADDR" ]; then
+                ip addr add $GRE05_SRC_IPADDR dev gre5 2> /dev/null
+            else
+                ip addr add $GRE05_SRC_IPADDR peer $GRE05_DST_IPADDR dev gre5 2> /dev/null
+                [ -n "$GRE05_TUNNEL_MASK" ] && ifconfig gre5 $GRE05_SRC_IPADDR netmask $GRE05_TUNNEL_MASK pointopoint $GRE05_DST_IPADDR
+            fi
+            route add -net $GRE05_REMOTE_NETWORK netmask $GRE05_REMOTE_NETMASK dev gre5 2> /dev/null
+        fi 
+### 06
+        if [ "$T" = "06" ] || [ "$T" = "*" ] && [ "$GRE06_ENABLED" = "1" ] && [ -n "$GRE06_REMOTE_NETWORK" ] && [ -n "$GRE06_REMOTE_NETMASK" ]; then
+            [ -n "$GRE06_TUNNEL_MTU" ] && MTU06="mtu $GRE06_TUNNEL_MTU"
+            ip tunnel add gre6 mode gre remote $GRE06_REMOTE_IPADDR 2> /dev/null
+            ip link set gre6 up $MTU06 2> /dev/null
+            [ -n "$GRE06_TUNNEL_MASK" ] && ifconfig gre6 netmask $GRE06_TUNNEL_MASK
+            [ -z "$GRE06_SRC_IPADDR" ] && GRE06_SRC_IPADDR=$ETH_IPADDR
+            if [ -z "$GRE06_DST_IPADDR" ]; then
+                ip addr add $GRE06_SRC_IPADDR dev gre6 2> /dev/null
+            else
+                ip addr add $GRE06_SRC_IPADDR peer $GRE06_DST_IPADDR dev gre6 2> /dev/null
+                [ -n "$GRE06_TUNNEL_MASK" ] && ifconfig gre6 $GRE06_SRC_IPADDR netmask $GRE06_TUNNEL_MASK pointopoint $GRE06_DST_IPADDR
+            fi
+            route add -net $GRE06_REMOTE_NETWORK netmask $GRE06_REMOTE_NETMASK dev gre6 2> /dev/null
+        fi
+### 07
+        if [ "$T" = "07" ] || [ "$T" = "*" ] && [ "$GRE07_ENABLED" = "1" ] && [ -n "$GRE07_REMOTE_NETWORK" ] && [ -n "$GRE07_REMOTE_NETMASK" ]; then
+            [ -n "$GRE07_TUNNEL_MTU" ] && MTU07="mtu $GRE07_TUNNEL_MTU"
+            ip tunnel add gre7 mode gre remote $GRE07_REMOTE_IPADDR 2> /dev/null
+            ip link set gre7 up $MTU07 2> /dev/null
+            [ -n "$GRE07_TUNNEL_MASK" ] && ifconfig gre7 netmask $GRE07_TUNNEL_MASK
+            [ -z "$GRE07_SRC_IPADDR" ] && GRE07_SRC_IPADDR=$ETH_IPADDR
+            if [ -z "$GRE07_DST_IPADDR" ]; then
+                ip addr add $GRE07_SRC_IPADDR dev gre7 2> /dev/null
+            else
+                ip addr add $GRE07_SRC_IPADDR peer $GRE07_DST_IPADDR dev gre7 2> /dev/null
+                [ -n "$GRE07_TUNNEL_MASK" ] && ifconfig gre7 $GRE07_SRC_IPADDR netmask $GRE07_TUNNEL_MASK pointopoint $GRE07_DST_IPADDR
+            fi
+            route add -net $GRE07_REMOTE_NETWORK netmask $GRE07_REMOTE_NETMASK dev gre7 2> /dev/null
+        fi 
+### 08
+        if [ "$T" = "08" ] || [ "$T" = "*" ] && [ "$GRE08_ENABLED" = "1" ] && [ -n "$GRE08_REMOTE_NETWORK" ] && [ -n "$GRE08_REMOTE_NETMASK" ]; then
+            [ -n "$GRE08_TUNNEL_MTU" ] && MTU08="mtu $GRE08_TUNNEL_MTU"
+            ip tunnel add gre8 mode gre remote $GRE08_REMOTE_IPADDR 2> /dev/null
+            ip link set gre8 up $MTU08 2> /dev/null
+            [ -n "$GRE08_TUNNEL_MASK" ] && ifconfig gre8 netmask $GRE08_TUNNEL_MASK
+            [ -z "$GRE08_SRC_IPADDR" ] && GRE08_SRC_IPADDR=$ETH_IPADDR
+            if [ -z "$GRE08_DST_IPADDR" ]; then
+                ip addr add $GRE08_SRC_IPADDR dev gre8 2> /dev/null
+            else
+                ip addr add $GRE08_SRC_IPADDR peer $GRE08_DST_IPADDR dev gre8 2> /dev/null
+                [ -n "$GRE08_TUNNEL_MASK" ] && ifconfig gre8 $GRE08_SRC_IPADDR netmask $GRE08_TUNNEL_MASK pointopoint $GRE08_DST_IPADDR
+            fi
+            route add -net $GRE08_REMOTE_NETWORK netmask $GRE08_REMOTE_NETMASK dev gre8 2> /dev/null
+        fi 
+### 09
+        if [ "$T" = "09" ] || [ "$T" = "*" ] && [ "$GRE09_ENABLED" = "1" ] && [ -n "$GRE09_REMOTE_NETWORK" ] && [ -n "$GRE09_REMOTE_NETMASK" ]; then
+            [ -n "$GRE09_TUNNEL_MTU" ] && MTU09="mtu $GRE09_TUNNEL_MTU"
+            ip tunnel add gre9 mode gre remote $GRE09_REMOTE_IPADDR 2> /dev/null
+            ip link set gre9 up $MTU09 2> /dev/null
+            [ -n "$GRE09_TUNNEL_MASK" ] && ifconfig gre9 netmask $GRE09_TUNNEL_MASK
+            [ -z "$GRE09_SRC_IPADDR" ] && GRE09_SRC_IPADDR=$ETH_IPADDR
+            if [ -z "$GRE09_DST_IPADDR" ]; then
+                ip addr add $GRE09_SRC_IPADDR dev gre9 2> /dev/null
+            else
+                ip addr add $GRE09_SRC_IPADDR peer $GRE09_DST_IPADDR dev gre9 2> /dev/null
+                [ -n "$GRE09_TUNNEL_MASK" ] && ifconfig gre9 $GRE09_SRC_IPADDR netmask $GRE09_TUNNEL_MASK pointopoint $GRE09_DST_IPADDR
+            fi
+            route add -net $GRE09_REMOTE_NETWORK netmask $GRE09_REMOTE_NETMASK dev gre9 2> /dev/null
+        fi 
+### 10
+        if [ "$T" = "10" ] || [ "$T" = "*" ] && [ "$GRE10_ENABLED" = "1" ] && [ -n "$GRE10_REMOTE_NETWORK" ] && [ -n "$GRE10_REMOTE_NETMASK" ]; then
+            [ -n "$GRE10_TUNNEL_MTU" ] && MTU10="mtu $GRE10_TUNNEL_MTU"
+            ip tunnel add gre10 mode gre remote $GRE10_REMOTE_IPADDR 2> /dev/null
+            ip link set gre10 up $MTU10 2> /dev/null
+            [ -n "$GRE10_TUNNEL_MASK" ] && ifconfig gre10 netmask $GRE10_TUNNEL_MASK
+            [ -z "$GRE10_SRC_IPADDR" ] && GRE10_SRC_IPADDR=$ETH_IPADDR
+            if [ -z "$GRE10_DST_IPADDR" ]; then
+                ip addr add $GRE10_SRC_IPADDR dev gre10 2> /dev/null
+            else
+                ip addr add $GRE10_SRC_IPADDR peer $GRE10_DST_IPADDR dev gre10 2> /dev/null
+                [ -n "$GRE10_TUNNEL_MASK" ] && ifconfig gre10 $GRE10_SRC_IPADDR netmask $GRE10_TUNNEL_MASK pointopoint $GRE10_DST_IPADDR
+            fi
+            route add -net $GRE10_REMOTE_NETWORK netmask $GRE10_REMOTE_NETMASK dev gre10 2> /dev/null
+        fi 
+### iptables
+    iptables -t filter -F gre 
+    for i in `seq 10`; do
+        [ ! "$i" = "10" ] && i="0$i"
+        eval EN="$"GRE${i}_ENABLED
+        eval SRC="$"GRE${i}_REMOTE_IPADDR
+        eval NET="$"GRE${i}_REMOTE_NETWORK
+        eval MASK="$"GRE${i}_REMOTE_NETMASK
+        if [ "$EN" = "1" ] && [ -n "$SRC" ] && [ -n "$NET" ] && [ -n "$MASK" ] ; then
+            iptables -t filter -A gre -p 47 -s $SRC -j ACCEPT
+            iptables -t filter -A gre -s $NET/$MASK -j ACCEPT
+        fi  
+    done
+
+    echo "done"
+    RET=0
+}
+
+stop(){
+    echo -n "Stopping GRE tunnel #$T: "
+    iptables -t filter -F gre
+
+    [ "$T" = "01" ] || [ "$T" = "*" ] && ip tunnel del gre1 2> /dev/null
+    [ "$T" = "02" ] || [ "$T" = "*" ] && ip tunnel del gre2 2> /dev/null
+    [ "$T" = "03" ] || [ "$T" = "*" ] && ip tunnel del gre3 2> /dev/null
+    [ "$T" = "04" ] || [ "$T" = "*" ] && ip tunnel del gre4 2> /dev/null
+    [ "$T" = "05" ] || [ "$T" = "*" ] && ip tunnel del gre5 2> /dev/null
+    [ "$T" = "06" ] || [ "$T" = "*" ] && ip tunnel del gre6 2> /dev/null
+    [ "$T" = "07" ] || [ "$T" = "*" ] && ip tunnel del gre7 2> /dev/null
+    [ "$T" = "08" ] || [ "$T" = "*" ] && ip tunnel del gre8 2> /dev/null
+    [ "$T" = "09" ] || [ "$T" = "*" ] && ip tunnel del gre9 2> /dev/null
+    [ "$T" = "10" ] || [ "$T" = "*" ] && ip tunnel del gre10 2> /dev/null
+    echo "done"
+    RET=0
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart} [Tunnel_Number]"
+        exit 1
+        ;;
+esac
+clear_conntrack &
+exit $RET

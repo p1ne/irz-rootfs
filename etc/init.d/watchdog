@@ -1,0 +1,35 @@
+#!/bin/sh
+#
+# Start the watchdog....
+#
+
+start() {
+    echo "Starting watchdog..."        
+    /sbin/watchdog /dev/watchdog
+    }   
+stop() {
+    echo "Stopping watchdog..."
+    kill `cat /var/run/watchdog.pid`
+}
+restart() {
+    stop
+    start
+}   
+
+case "$1" in
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  restart|reload)
+    restart
+    ;;
+  *)
+    echo $"Usage: $0 {start|stop|restart}"
+    exit 1
+esac
+
+exit $?
+

@@ -1,0 +1,108 @@
+#!/bin/sh
+# turn busy led on or off
+# PA4 - CSQ 1
+# PA2 - CSQ 2
+# PA1 - CSQ 3
+# PA0 - CSQ 4
+# PB29 - 3G
+# PD15 - PPP
+
+usage() {
+    echo "Usage: $0 (wl_low|wl_high|csq_low|csq_high|sim1|sim2|busy) (0|1)"
+    exit 1
+}
+
+[ -z "$1" ] && usage
+[ -z "$2" ] && usage
+
+case "$1" in
+    wl_low)
+        case "$2" in
+            0) echo 0 > /sys/class/leds/WLAN_LOW/brightness ;;
+            1) echo 1 > /sys/class/leds/WLAN_LOW/brightness ;;
+            *) usage ;;
+        esac
+        ;;
+    wl_high)
+        case "$2" in
+    	    0) echo 0 > /sys/class/leds/WLAN_HIGH/brightness ;;
+            1) echo 1 > /sys/class/leds/WLAN_HIGH/brightness ;;
+            *) usage ;;
+        esac
+        ;;
+    csq_low)
+        case "$2" in
+    	    0) echo 0 > /sys/class/leds/CSQ_LOW/brightness ;;
+            1) echo 1 > /sys/class/leds/CSQ_LOW/brightness ;;
+            *) usage ;;
+        esac
+        ;;
+    csq_high)
+        case "$2" in
+    	    0) echo 0 > /sys/class/leds/CSQ_HIGH/brightness ;;
+            1) echo 1 > /sys/class/leds/CSQ_HIGH/brightness ;;
+            *) usage ;;
+        esac
+        ;;
+    sim1)
+        case "$2" in
+    	    0) echo 0 > /sys/class/leds/SIM1/brightness ;;
+            1) echo 1 > /sys/class/leds/SIM1/brightness ;;
+            *) usage ;;
+        esac
+        ;;
+    sim2)
+        case "$2" in
+    	    0) echo 0 > /sys/class/leds/SIM2/brightness ;;
+            1) echo 1 > /sys/class/leds/SIM2/brightness ;;
+            *) usage ;;
+        esac
+        ;;
+    busy|defaults_flash)
+        case "$2" in
+    	    0) echo 0 > /sys/class/leds/BUSY/brightness ;;
+            1) echo 1 > /sys/class/leds/BUSY/brightness ;;
+            *) usage ;;
+        esac
+        ;;
+    csq)
+        case "$2" in
+            0) 	echo 0 > /sys/class/leds/CSQ_LOW/brightness
+        	echo 0 > /sys/class/leds/CSQ_HIGH/brightness
+        	;;
+            1) 	echo 1 > /sys/class/leds/CSQ_LOW/brightness
+        	echo 0 > /sys/class/leds/CSQ_HIGH/brightness
+        	;;
+            2) 	echo 1 > /sys/class/leds/CSQ_LOW/brightness
+        	echo 1 > /sys/class/leds/WLAN_HIGH/brightness
+            ;;
+            3) 	echo 0 > /sys/class/leds/CSQ_LOW/brightness
+        	echo 1 > /sys/class/leds/CSQ_HIGH/brightness
+            ;;
+            *) usage ;;
+        esac
+        ;;
+    wl)
+        case "$2" in
+            0) 	echo 0 > /sys/class/leds/WLAN_LOW/brightness
+        	echo 0 > /sys/class/leds/WLAN_HIGH/brightness
+        	;;
+            1) 	echo 1 > /sys/class/leds/WLAN_LOW/brightness
+        	echo 0 > /sys/class/leds/WLAN_HIGH/brightness
+        	;;
+            2) 	echo 1 > /sys/class/leds/WLAN_LOW/brightness
+        	echo 1 > /sys/class/leds/WLAN_HIGH/brightness
+            ;;
+            3) 	echo 0 > /sys/class/leds/WLAN_LOW/brightness
+        	echo 1 > /sys/class/leds/WLAN_HIGH/brightness
+            ;;
+            *) usage ;;
+        esac
+        ;;        
+    3g)exit 0;;
+    
+    *)
+        usage
+        ;;
+esac
+

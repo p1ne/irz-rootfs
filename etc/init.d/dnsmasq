@@ -1,0 +1,48 @@
+#!/bin/sh
+
+start() {
+    echo -n "Starting dnsmasq: "
+    if [ -e /var/run/dnsmasq.pid ];then
+        kill `cat /var/run/dnsmasq.pid`
+    fi  
+    #add self to /etc/hosts (remove -h key for dnsmasq)
+    #. /mnt/rwfs/settings/settings.eth
+    #echo "$ETH_IPADDR     router" > /etc/hosts
+    #start daemon 
+    u=`grep ":0:0:" /etc/passwd | sed -e 's/\:.*//'`
+    dnsmasq -h -u $u -r /etc/resolv.conf
+    RETVAL=$?
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+}
+
+stop() {
+    echo -n "Stopping dnsmasq: "
+    if [ -e /var/run/dnsmasq.pid ]; then
+        kill `cat /var/run/dnsmasq.pid`
+        rm /var/run/dnsmasq.pid
+        RETVAL=$?
+    else
+        RETVAL=0
+    fi  
+    if [ "$RETVAL" = "0" ]; then echo "done"; else echo "failed"; fi
+}
+
+case "$1" in
+    start)
+        start
+        exit $RETVAL
+        ;;
+    restart)
+        stop
+        start
+        exit $RETVAL
+        ;;
+    stop)
+        stop
+        exit $RETVAL
+        ;;
+    *)
+    echo "Usage: $0 {start|restart|stop}"
+    exit 1
+esac
+

@@ -1,0 +1,42 @@
+#!/bin/sh
+
+_private() {
+    echo "Private"
+    exit 0
+}
+_public() {
+    echo "Public"
+    exit 0
+}
+
+if [ -z "$1" ]; then
+    echo "Usage: $0 IP_ADDRESS"
+    exit 0
+fi
+N1=`echo $1|awk -F. '{print $1}'`
+N2=`echo $1|awk -F. '{print $2}'`
+N3=`echo $1|awk -F. '{print $3}'`
+N4=`echo $1|awk -F. '{print $4}'`
+if [ -z "$N1" ] || [ -z "$N2" ] || [ -z "$N3" ] || [ -z "$N4" ]; then
+    echo "Bad addess"
+    exit 1
+fi
+
+case $N1 in
+    10)
+        _private
+        ;;
+    172)
+        [ "$N2" -lt 16 ] && _public
+        [ "$N2" -ge 31 ] && _public
+        _private
+        ;;
+    192)
+        [ "$N2" = 168 ] && _private
+        _public
+        ;;
+    *)
+        _public
+        ;;
+esac
+exit 1

@@ -1,0 +1,9 @@
+#!/bin/sh
+if [ -z "$1" ]; then
+    echo "No device given!"
+    exit 1
+else
+    L=`echo $1| sed -e 's|^.*/||'`
+fi
+
+lockfile-remove -l /var/lock/LCK..$L

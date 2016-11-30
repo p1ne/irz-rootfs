@@ -1,0 +1,97 @@
+#!/bin/sh
+S=/mnt/rwfs/settings/settings.pptp
+C=/etc/ppp/peers/pptp-vpn
+
+usage() {
+    echo "Usage: $0 (start|restart|stop)"
+    exit
+}
+
+
+start() {
+    echo -n "Starting PPTP: "
+    if [ ! -e "$S" ]; then
+        cp /etc/defaults/settings.pptp $S
+    fi
+    . $S
+
+    if [ "$PPTP_ENABLED" = "1" ]; then
+        writesecret ppp11 del
+        if [ "$PPTP_PAP" != "1" ]; then
+            PAPSTR=refuse-pap
+        else
+            writesecret ppp11 pap  $PPTP_USERNAME $PPTP_PASSWORD
+        fi
+        if [ "$PPTP_CHAP" != "1" ]; then
+            CHAPSTR1=refuse-chap
+            CHAPSTR2=refuse-mschap
+            CHAPSTR3=refuse-mschap-v2
+        else
+            writesecret ppp11 chap $PPTP_USERNAME $PPTP_PASSWORD
+        fi
+        if [ "$PPTP_MPPE" = "1" ]; then
+            MPPESTR=require-mppe-128
+        fi
+        if [ -n "$PPTP_LOCAL_IP" ] && [ -n "$PPTP_REMOTE_IP" ]; then
+            LOCREMSTR="$PPTP_LOCAL_IP:$PPTP_REMOTE_IP"
+        fi
+
+cat << EOF > $C
+pty "pptp $PPTP_SERVER_IP --nolaunchpppd"
+user $PPTP_USERNAME
+noauth
+nodefaultroute
+maxfail 0
+holdoff 30
+persist
+lock
+unit 11
+$PAPSTR
+$CHAPSTR1
+$CHAPSTR2
+$CHAPSTR3
+$MPPESTR
+$LOCREMSTR
+$PPTP_PPP_OPTIONS
+EOF
+
+        pppd call pptp-vpn
+        res=$?
+        if [ "$res" = "0" ]; then
+            echo "Done"
+        else
+            echo "Fail"
+        fi
+    else
+        echo "skipped"
+    fi
+}
+
+stop() {
+    echo -n "Stopping PPTP: "
+    PD=`ps | grep pptp-vpn | grep -v grep | sed -e 's/^ *//g;s/ .*//g'`
+    if [ -n "$PD" ]; then
+        kill -9 $PD
+        res=$?
+    else
+        res=1
+    fi
+    if [ "$res" = "0" ]; then
+        echo "Done"
+    else
+        echo "Fail"
+    fi
+}
+
+
+
+case "$1" in
+    start)
+        start ; exit $res ;;
+    restart)
+        stop ; start ; exit $res;;
+    stop)
+        stop ; exit $res ;;
+    *)
+        usage ;;
+esac

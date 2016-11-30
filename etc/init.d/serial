@@ -1,0 +1,205 @@
+#!/bin/sh
+
+if [ -e /mnt/rwfs/settings/settings.serial ]; then
+    . /mnt/rwfs/settings/settings.serial
+else
+    cp /etc/defaults/settings.serial /mnt/rwfs/settings/settings.serial
+    . /mnt/rwfs/settings/settings.serial
+fi
+
+start(){
+    . /etc/version
+
+    case "$1" in
+        1)
+            CHAIN=tty2net232
+            # do nothing.
+            ;;
+        2)
+            CHAIN=tty2net485
+            SER_MODE=$SER_MODE_4XX
+            SER_IFACE=$SER_IFACE_4XX
+            SER_PORT=$SER_PORT_4XX
+            SER_SERVER=$SER_SERVER_4XX
+            SER_BAUD=$SER_BAUD_4XX
+            SER_DATA=$SER_DATA_4XX
+            SER_PARITY=$SER_PARITY_4XX
+            SER_STOP=$SER_STOP_4XX
+            SER_TOUT=$SER_TOUT_4XX
+            SER_ACCUM_INTVL=$SER_ACCUM_INTVL_4XX
+            SER_ACCUM_ATTS=$SER_ACCUM_ATTS_4XX
+            SER_RECON_DELAY=$SER_RECON_DELAY_4XX
+            SER_BANNER=$SER_BANNER_4XX
+            ;;
+        *) 
+            start 1
+            start 2
+            exit 0
+            ;;
+    esac
+    
+    echo -n "Starting tty2net $1: "
+
+    if [ "$SER_MODE" != "none" ]; then
+        iptables -t filter -F $CHAIN
+        iptables -t filter -A $CHAIN -p tcp --dport $SER_PORT -j ACCEPT
+    fi
+
+    case $SER_IFACE in
+        485)
+            DEV=/dev/ttyS2
+            if [ "$MODEL" = "RUH3" ]; then
+                usart_mode 1:485 &> /dev/null
+                echo in > /sys/class/gpio/RE/direction
+            fi
+            ;; 
+        422)
+            DEV=/dev/ttyS2
+            if [ "$MODEL" = "RUH3" ]; then
+                usart_mode 1:485 &> /dev/null
+                echo out > /sys/class/gpio/RE/direction
+                echo 0 > /sys/class/gpio/RE/value
+            fi
+            ;;
+        usb)    DEV=`getusbcom` ;;
+        *)      DEV=/dev/ttyS3 ;;
+    esac
+
+    TTY2NET_ARGS=""
+
+    if test -n "$SER_BAUD"; then
+        TTY2NET_ARGS="${TTY2NET_ARGS} -b ${SER_BAUD}"
+    fi
+
+    if test -n "$SER_TOUT"; then
+        TTY2NET_ARGS="${TTY2NET_ARGS} -w ${SER_TOUT}"
+    fi
+
+    if test -n "$SER_ACCUM_INTVL"; then
+        TTY2NET_ARGS="${TTY2NET_ARGS} -a ${SER_ACCUM_INTVL}"
+    fi
+
+    if test -n "$SER_ACCUM_ATTS"; then
+        TTY2NET_ARGS="${TTY2NET_ARGS} -A ${SER_ACCUM_ATTS}"
+    fi
+
+    if test -n "$SER_RECON_DELAY"; then
+        TTY2NET_ARGS="${TTY2NET_ARGS} -r ${SER_RECON_DELAY}"
+    fi
+        
+    if test -n "$SER_BANNER"; then
+        SER_BANNER=`decode $SER_BANNER|sed -e 's/\ /\\\x20/g'`
+    fi
+
+    case "${SER_DATA}" in
+        7DATABITS)
+            TTY2NET_ARGS="${TTY2NET_ARGS} -d 7"
+            ;;
+        *)
+            TTY2NET_ARGS="${TTY2NET_ARGS} -d 8"
+            ;;
+    esac
+
+    case "${SER_PARITY}" in
+        EVEN)   TTY2NET_ARGS="${TTY2NET_ARGS} -p even";;
+        ODD)    TTY2NET_ARGS="${TTY2NET_ARGS} -p odd" ;;
+        *)      TTY2NET_ARGS="${TTY2NET_ARGS} -p none";;
+    esac
+    case "${SER_STOP}" in
+        2STOPBITS)  TTY2NET_ARGS="${TTY2NET_ARGS} -S";;
+    esac
+
+    if [ ! -e "/var/run/tty2net.$1.pid" ]; then
+        case "$SER_MODE" in
+            client)
+                if [ -z "$SER_BANNER" ]; then
+                    start-stop-daemon -b -q --oknodo --pidfile "/var/run/tty2net.$1.pid" -m --start -x tty2net -- $DEV $SER_SERVER $SER_PORT -c $TTY2NET_ARGS & ##> /dev/null
+                else
+                    start-stop-daemon -b -q --oknodo --pidfile "/var/run/tty2net.$1.pid" -m --start -x tty2net -- $DEV $SER_SERVER $SER_PORT -c $TTY2NET_ARGS -N"$SER_BANNER" & ##> /dev/null
+                fi
+                RETVAL=$?
+                ;;
+            server)
+                if [ -z "$SER_BANNER" ]; then
+                    start-stop-daemon -b -q  --oknodo --pidfile "/var/run/tty2net.$1.pid" -m --start -x tty2net -- $DEV 0.0.0.0 $SER_PORT $TTY2NET_ARGS & ##> /dev/null
+                else
+                    start-stop-daemon -b -q  --oknodo --pidfile "/var/run/tty2net.$1.pid" -m --start -x tty2net -- $DEV 0.0.0.0 $SER_PORT $TTY2NET_ARGS -N"$SER_BANNER" & ##> /dev/null
+                fi
+                RETVAL=$?
+                ;;
+            *)
+                echo "skipped"
+                RETVAL=0
+                ;;
+        esac
+        if [ "$RETVAL" = 0 ]; then 
+            echo "done"
+        else 
+            echo "failed"
+        fi  
+    else
+        echo "skipped"
+        RETVAL=0;
+    fi
+    return $RETVAL
+}
+
+stop(){   
+    echo -n "Stopping tty2net $1: "
+    case "$1" in
+        1)  iptables -t filter -F tty2net232;;
+        2)  iptables -t filter -F tty2net485;;
+    esac
+    if [ -e "/var/run/tty2net.$1.pid" ]; then
+        start-stop-daemon --oknodo --stop -q --pidfile "/var/run/tty2net.$1.pid" &> /dev/null
+        RETVAL=$?
+        if [ "$RETVAL" = 0 ]; then 
+            echo "done"
+        else
+            echo "failed"
+        fi
+        rm "/var/run/tty2net.$1.pid" &> /dev/null
+    else
+        echo "skipped"
+        RETVAL=0
+    fi
+    return $RETVAL
+}
+
+restart(){
+    stop $1
+    start $1
+}
+
+
+case "$1" in
+    start)
+        start $2
+        ;;
+    stop)
+        case "$2" in
+            1) stop 1 ;;
+            2) stop 2 ;;
+            *) 
+                stop 1
+                stop 2
+                ;;
+        esac
+        ;;
+    restart)
+        case "$2" in
+            1) restart 1 ;;
+            2) restart 2 ;;
+            *) 
+                restart 1
+                restart 2
+                ;;
+        esac
+        ;;
+    *)
+        echo "Usage: $0 {start|restart|stop}"
+        RET=1
+        ;;
+esac
+clear_conntrack &
+exit $RET

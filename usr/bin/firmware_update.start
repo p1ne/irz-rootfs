@@ -1,0 +1,8 @@
+#!/bin/sh
+[ -x /bin/busybox ] && cp /bin/busybox /tmp
+[ -x /usr/bin/firmware_update ] && cp /usr/bin/firmware_update /tmp
+[ -x /usr/sbin/flashcp ] && cp /usr/sbin/flashcp /tmp
+[ -x /usr/sbin/flash_erase ] && cp /usr/sbin/flash_erase /tmp
+[ -x /usr/bin/rfill ] && cp /usr/bin/rfill /tmp
+[ -s /etc/name ] && cp  /etc/name /tmp
+/tmp/busybox sh /tmp/firmware_update $*

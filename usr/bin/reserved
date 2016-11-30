@@ -1,0 +1,123 @@
+#!/bin/sh
+
+[ -e "/mnt/rwfs/settings/settings.eth" ] && . /mnt/rwfs/settings/settings.eth
+
+# $1 - ping target
+# $2 - ifname
+# $3 - main router ip
+# $4 - check interval
+
+target=$1
+ifname=$2
+router=$3
+int=$4
+
+if [ "$int" -gt "0" ]; then
+    interval=$int
+else
+    interval=10
+fi
+
+switch_to_ppp() {
+    logger -t reserved -p daemon.info "Trying ppp"
+    ## start ppp if not running
+    ppp=`pidof init.d/ppp`
+    pppd=`pidof pppd`
+    if [ -z "$ppp" ] && [ -z "$pppd" ]; then
+        /etc/init.d/ppp start
+    fi
+    ## wait up to 2 minutes for connect
+    for i in `seq 12`; do
+        if [ ! -f /var/ppp/remoteip ]; then
+            sleep 10
+        else
+            break
+        fi
+    done
+    ## do actual switching only if ppp link exist
+    if [ -f /var/ppp/remoteip ]; then
+        logger -t $0 -p daemon.info "Switching to ppp"
+        /etc/init.d/connection message "Reserved: switching to ppp"
+        netservices stop
+        echo "ppp" > /tmp/reserve
+        /etc/init.d/sms eth-disconnect
+        route del default
+        ## check and add default route
+        remoteip=`cat /var/ppp/remoteip`
+        def=`route -n|grep '^0.0.0.0'`
+        if [ -z "$def" ]; then
+            remoteip=`cat /var/ppp/remoteip`
+            while [ -z "$remoteip" ]; do
+                logger -t reserved "Can't get remote ip!"
+                sleep 5
+                remoteip=`cat /var/ppp/remoteip`
+            done
+            route add default gw $remoteip
+        fi
+        ## we also take care of resolv.conf
+        /etc/init.d/dnsmasq stop
+        [ -f /var/etc/resolv.conf ] && rm /var/etc/resolv.conf
+        ln -s /var/etc/resolv.conf.ppp /var/etc/resolv.conf
+        /etc/init.d/dnsmasq start
+        netservices start
+    fi
+}
+
+switch_to_eth() {
+    logger -t reserve -p daemon.info "Switching to eth"
+    /etc/init.d/connection message "Reserved: switching to eth"
+    netservices stop
+    echo "eth" > /tmp/reserve
+    if [ "$ETH_RESERVE_PPPON" = "1" ]; then
+        ## start ppp if not running
+        ppp=`pidof init.d/ppp`
+        pppd=`pidof pppd`
+        if [ -z "$ppp" ] && [ -z "$pppd" ]; then
+            /etc/init.d/ppp start &
+        fi
+    else
+        /etc/init.d/ppp stop
+    fi
+    route del default
+    ip route add default via $router dev $ifname
+    /etc/init.d/sms eth-connect
+    case $ifname in
+        eth0:0) echo "$ETH_IPADDR2" > /tmp/ip ;;
+        eth1)   echo "$ETH_IPADDR3" > /tmp/ip ;;
+        *)      echo "$ETH_IPADDR" > /tmp/ip ;;
+    esac
+    ## Set DNS to main router
+    /etc/init.d/dnsmasq stop
+    echo "nameserver $router" > /var/etc/resolv.conf.eth
+    [ -f /var/etc/resolv.conf ] && rm /var/etc/resolv.conf
+    ln -s /var/etc/resolv.conf.eth /var/etc/resolv.conf
+    /etc/init.d/dnsmasq start
+    netservices start
+}
+
+
+## set route to test ip via eth
+ip route add $target via $router dev $ifname metric 5
+logger -t reserved -p daemon.info "Started. Check $target via $router dev $ifname"
+echo "" > /tmp/reserve
+lastres=0
+## main loop
+while true; do
+    ping -I $ifname -c 3 -q $target > /dev/null
+    pingres=$?
+    if [ "$pingres" = "0" ]; then
+        ## ping ok, switch to eth if it is not current
+        current=`cat /tmp/reserve`
+        if [ "$current" != "eth" ]; then
+            switch_to_eth
+        fi
+    else
+        ## ping failed, check if we already on ppp
+        current=`cat /tmp/reserve`
+        if [ "$current" != "ppp" ]; then
+            switch_to_ppp
+        fi
+    fi
+    sleep $interval
+done
+exit 0

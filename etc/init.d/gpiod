@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+DAEMON=/usr/bin/gpiod
+PIDFILE=/var/run/gpiod.pid
+
+test -f $DAEMON || exit 0
+
+case "$1" in
+  start)
+    $DAEMON &
+    ;;
+  stop)
+    killall $DAEMON
+    ;;
+  restart|force-reload)
+#    start-stop-daemon -K  -p $PIDFILE -x $DAEMON 
+#    sleep 1
+#    start-stop-daemon -S  -p $PIDFILE -x $DAEMON &
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: /etc/init.d/gpiod {start|stop|restart|force-reload}"
+    exit 1
+    ;;
+esac
+
+exit 0

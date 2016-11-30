@@ -1,0 +1,47 @@
+#!/bin/sh
+
+IFACE=`cat /tmp/reserve`
+#check connection and restart pppd if needed
+CNT=/tmp/pingcount
+
+PING_IPADDR=$1
+COUNT=$2
+[ -z "$PING_IPADDR" ] && echo "No address specified!" && exit 1
+[ -z "$COUNT" ] && echo "No tries specified!" && exit 1
+
+if [ -e /var/ppp/ip ]; then
+    res=1
+    for CUR_PING_IPADDR in `echo $PING_IPADDR | sed 's/;/\n/g'`; do
+        ping -I ppp0 $CUR_PING_IPADDR -c 5 > /dev/null
+        if [ "$?" = "0" ]; then
+            res=$?
+            logger -t ppp_ping -p daemon.info "Server $CUR_PING_IPADDR is alive"
+        else
+            logger -t ppp_ping -p daemon.info "Server $CUR_PING_IPADDR doesn't respond"
+        fi
+    done
+    if [ "$res" = "0" ]; then
+        if [ -e $CNT ]; then
+            rm $CNT
+            /etc/init.d/cron restart
+        fi
+        [ -f /tmp/ping_fail ] && rm /tmp/ping_fail
+    else
+        [ ! -e $CNT ] && echo $COUNT > $CNT
+        LEFT=`cat $CNT`
+        if [ "$LEFT" = "0" ]; then
+            rm $CNT
+            logger -t ppp_ping -p daemon.info "Server(s) $PING_IPADDR did not respond. Restarting pppd..."
+            touch /tmp/ping_fail
+            /etc/init.d/ppp stop
+            /etc/init.d/ppp start
+        else
+            if [ "$LEFT" = "$COUNT" ]; then
+                /etc/init.d/cron restart
+            fi
+            logger -t ppp_ping -p daemon.info "Server(s) $PING_IPADDR did not respond. $LEFT attempts left"
+            LEFT=$(( LEFT - 1 ))
+            echo $LEFT > $CNT
+        fi  
+    fi  
+fi

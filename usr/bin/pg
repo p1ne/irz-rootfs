@@ -1,0 +1,7 @@
+#!/bin/sh
+if [ -n "$1" ]; then
+    ps www|grep $*
+else
+    echo "Usage: pg arg_to_grep"
+fi
+

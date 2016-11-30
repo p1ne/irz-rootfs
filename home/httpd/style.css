@@ -1,0 +1,44 @@
+body, table, tr, td, a { 
+	font-size: 12px; font-family: Verdana, Arial, Helvetica, sans-serif
+}   
+
+td.td1 {
+	vertical-align: top
+}                       
+
+td.menu {
+	background-color: #C0C0C0; color: #000000
+}
+td.menu_sel {
+    background-color: #999999; color: #000000
+}
+
+
+td.title {
+	background-color: #000000; color: #FFFFFF
+}
+
+td.main {
+	background-color: #C0C0C0; color: #000000
+}
+
+h1 {
+    font-size: 20px; color: #000000
+}   
+
+h2 {
+	font-size: 16px; color: #000000
+}   
+
+a { 
+	color: #000000; text-decoration: none
+}   
+
+a:hover {
+	text-decoration: underline
+}   
+
+.input {
+	width: 165px
+}   
+

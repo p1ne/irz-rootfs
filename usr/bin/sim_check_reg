@@ -1,0 +1,29 @@
+#!/bin/sh
+# check for registration
+LOCK=/var/lock/modem
+DEV=/dev/modem
+REP=/tmp/checkreg.report
+if [ -f /tmp/debug ]; then
+    FLAG="-v"
+else
+    FLAG="-S"
+fi
+
+lockfile-create --retry 5 $LOCK
+res=$?
+if [ "$res" != "0" ]; then
+    logger -t $0 "Cannot lock $DEV"
+    exit 10
+fi
+FILE=/tmp/sim_check.chat
+echo "ABORT ERROR" > $FILE
+echo "REPORT CREG:" >> $FILE
+echo "'' AT\+CREG\?" >> $FILE
+echo "CREG:" >> $FILE
+chat $FLAG -r $REP -t 3 -f $FILE >$DEV <$DEV
+rm $FILE
+lockfile-remove $LOCK
+res=`cat $REP | grep CREG: | tail -c 2`
+rm $REP
+exit $res
+

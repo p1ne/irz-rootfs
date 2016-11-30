@@ -1,0 +1,51 @@
+#!/bin/sh
+
+[ -e /mnt/rwfs/settings/settings.eth ] && . /mnt/rwfs/settings/settings.eth
+
+start() {
+    echo -n "Starting reserved: "
+    if [ "$ETH_RESERVE" = "1" ] && [ -n "$ETH_RESERVE_TARGET" ]; then
+        reserved $ETH_RESERVE_TARGET $ETH_RESERVE_IFACE $ETH_RESERVE_ROUTER $ETH_RESERVE_INTERVAL &>/dev/null &
+        echo "OK"
+    else
+        echo "skipped"
+    fi
+}
+stop() {
+    echo -n "Stopping reserved: "
+    pid=`pidof reserved`
+    [ -n "$pid" ] && kill $pid
+    res=$?
+    if [ -n "$ETH_RESERVE_TARGET" ] && [ -n "$ETH_RESERVE_ROUTER" ] && [ -n "$ETH_RESERVE_IFACE" ]; then
+        ip route del $ETH_RESERVE_TARGET via $ETH_RESERVE_ROUTER dev $ETH_RESERVE_IFACE
+    fi
+    [ -f /tmp/reserve ] && rm /tmp/reserve
+    netservices stop 1>/dev/null 2>/dev/null
+    if [ "$res" = "0" ]; then
+        echo "OK"
+    else
+        echo "Failed"
+    fi
+}
+restart() {
+    stop
+    start
+}
+
+case "$1" in
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  restart|reload)
+    restart
+    ;;
+  *)
+    echo $"Usage: $0 {start|stop|restart}"
+    exit 1
+esac
+
+exit $?
+

@@ -1,0 +1,74 @@
+#!/bin/sh
+[ -f /etc/name ] && . /etc/name
+F=/mnt/rwfs/settings/unitname
+[ -f $F ] && UNIT=`cat $F`
+if [ -z "$1" ] || [ "$1" = "index.cgi" ]; then
+    PAGE=status_ppp.cgi
+else
+    PAGE=$1
+fi
+MENU=`echo $PAGE|awk -F_ '{print $1}'`
+menu_list="status config admin"
+for i in `echo $menu_list`; do
+    if [ "$MENU" = "$i" ]; then
+        eval $i="menu_sel"
+    else
+        eval $i="menu"
+    fi
+done 
+
+cat << EOF
+Content-type: text/html
+
+<!DOCTYPE HTML>
+<html>
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <META HTTP-EQUIV="Pragma" CONTENT="no-cache">
+  <title>${TXT}</title>
+  <link rel="stylesheet" type="text/css" href="/style.css">
+</head>
+
+<body bgcolor="#FFFFFF">
+ <table border="0" cellspacing="5" cellpadding="5" align="left">
+  <tr>
+    <td rowspan="3" width="166" height="100"><a href="/index.html"><img border="0" src="/logo.gif"></a></td>
+    <td width="834" colspan="3" style="text-align:center;"><font size="+2"><b>${HTML}</b></font></td>
+  </tr>
+  <tr>
+    <td colspan="3" style="text-align:center;vertical-align:middle;"><font size="+1">${UNIT}</font></td>
+  </tr>
+  <tr>
+   	<td align="center" class="$status"><a href="status_ppp.cgi"><b>Status and log</b></a></td>
+ 	<td align="center" class="$config"><a href="config_ppp.cgi"><b>Configuration</b></a></td>
+ 	<td align="center" class="$admin"><a href="admin_passwd.cgi"><b>Administration</b></a></td>
+  </tr>
+  <tr>
+    <td valign="top">
+EOF
+
+L=`grep -n $PAGE ./include/${MENU}.inc |sed -e 's/:.*$//'`
+. /etc/version
+S=/tmp/sidemenu
+cat ./include/${MENU}.inc | sed -e "$L s/menu/menu_sel/" > $S
+if [ ! "$BRANCH" = "sberbank" ]; then
+    cat $S| grep -v manageeth > $S.tmp
+    mv $S.tmp $S
+fi
+if [ ! "$MODEL" = "RUH3" ]; then
+     cat $S | grep -v gpio > $S.tmp
+     mv $S.tmp $S
+fi
+cat $S
+rm $S
+D=`date +%F`
+T=`date +%T`
+U=`uptime|sed -e 's/^.*up//'| sed -e 's/,.*$//'`
+cat << EOF
+<table width="166" border="0" >
+<tr><td>Date: $D</td></tr>
+<tr><td>Time: $T</td></tr>
+<tr><td>Uptime: $U</td></tr>
+</table>
+EOF

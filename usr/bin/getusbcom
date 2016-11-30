@@ -1,0 +1,29 @@
+#!/bin/sh
+case "$1" in
+        -a|--all)
+                ;;
+        "")
+                onlyone=1
+                ;;
+        *)
+                cat <<EOF
+Usage: $0 [ARGS]
+
+Print tty of a usb-serial adapter plugged into external usb port, if any.
+
+    -a, --all   print all tty's
+    -h, --help  show this message
+
+EOF
+                exit 0
+                ;;
+esac
+
+for i in $(stat -c '%N' /sys/bus/usb-serial/devices/ttyUSB* | \
+        grep 'at91_ohci/usb1/1-2' | cut -d "'" -f 2 | sed -e 's|.*/||');
+do
+    if [ -n "$i" -a -e "/dev/$i" ]; then
+        echo "/dev/$i"
+        [ "$onlyone" ] && break
+    fi
+done

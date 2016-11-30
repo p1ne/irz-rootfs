@@ -1,0 +1,82 @@
+#!/bin/sh
+. /etc/name
+F=/mnt/rwfs/settings/unitname
+[ -f $F ] && UNIT=`cat $F`
+t=/tmp/index.tmp
+h=/tmp/index.html
+cd /home/httpd
+##1
+cat << EOF > $t
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Cache-Control" content="no-cache" />
+  <title>${TXT}</title>
+  <link rel="stylesheet" type="text/css" href="/style.css">
+</head>
+<body>
+<center>
+    <table>
+      <tr>
+        <td>
+          <p><a href="cgi-bin/index.cgi"><h1 align="center">${HTML}</h1></a></p>
+          <p><a href="cgi-bin/index.cgi"><h2 align="center">[ Login ]</h2></a></p>
+          <p><h2 align="center">${UNIT}</h2></p>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <table width="100%">
+            <tr align="center">
+          <td class="menu" >Actual GSM Info</td>
+        </tr>
+        <tr>
+         <td>
+           <pre>
+EOF
+## On first update we do not need these stats
+## since interfaces are not ready yet
+if [ -z "$1" ]; then
+    gsminfo >> $t
+    pppinfo >> $t
+    mii-diag -s eth0 > /dev/null ; res=$?
+    if [ "$res" = "0" ]; then
+        LINK="Link OK"
+    else
+        LINK="No Link"
+    fi
+fi
+## Timestamp
+D=`date +%F`
+T=`date +%T`
+U=`uptime|sed -e 's/^.*up//'| sed -e 's/,.*$//'`
+cat << EOF >> $t
+            </pre>
+          </td></tr>
+        <tr align="center"><td class="menu">Date and Uptime</td></tr>
+        <tr><td>Date: $D</td></tr>
+        <tr><td>Time: $T</td></tr>
+        <tr><td>Uptime: $U</td></tr>
+        <tr><td>&nbsp;</td></tr>
+        <tr align="center"><td class="menu">Ethernet Link Status</td></tr>
+        <tr><td>$LINK</td></tr>
+          </table>
+        </td>
+      </tr>
+<!-- user defined -->
+<tr><td>
+EOF
+ui=/tmp/userindex
+if [ -f "$ui" ]; then 
+    cat $ui >> $t
+fi
+cat << EOF >> $t
+</td></tr>
+<!-- end of user defined -->
+    </table>
+</center>
+</body>
+</html>
+EOF
+mv $t $h
+
