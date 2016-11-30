@@ -149,7 +149,7 @@ if [ ! -z "$WIFI_MODE" ] && [ "$WIFI_MODE" != "DISABLED" ] ; then
         /usr/bin/modem on
         /etc/init.d/ppp start
 
-        hostapd -dd -B -P/var/run/hostapd.pid $HOSTAPD_CONF
+        hostapd -B -P/var/run/hostapd.pid $HOSTAPD_CONF
 
         echo -n AP > /var/tmp/wifi-mode
 
