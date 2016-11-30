@@ -8,6 +8,8 @@ start() {
 echo "Starting network... "
 
 [ -e /mnt/rwfs/settings/settings.eth ] && . /mnt/rwfs/settings/settings.eth
+[ -e /mnt/rwfs/settings/settings.wifi ] && . /mnt/rwfs/settings/settings.wifi
+
 if [ -z "$ETH_IPADDR" ]; then
     ETH_IPADDR="192.168.1.1"
     ETH_NETMASK="255.255.255.0"
@@ -15,6 +17,7 @@ fi
 
 ETH_MAC=`hwinfo mac`
 [ -z "$ETH_MAC" ] && ETH_MAC="01:23:45:67:89:ab"
+
 
 ## Eth media config
 if [ "$ETH_MII_FORCE" = "1" ] && [ -n "$ETH_MII_MEDIA" ] && [ -n "$ETH_MII_DUPLEX" ]; then
@@ -56,6 +59,106 @@ if [ "$ETH_RESERVE" = "1" ]; then
     fi
 fi
 
+if [ ! -z "$WIFI_MODE" ] && [ "$WIFI_MODE" != "DISABLED" ] ; then
+
+    if [ "$WIFI_MODE" = "AUTO" ] && [ ! -f /var/tmp/wifi-mode ]; then
+        echo -n AP > /var/tmp/wifi-mode
+    fi
+
+    if [ "$WIFI_MODE" = "AUTO" ]; then
+        if [ -f /var/tmp/wifi-mode ]; then
+            CURRENT_WIFI_MODE=$(cat /var/tmp/wifi-mode)
+        else
+            CURRENT_WIFI_MODE=AP
+            echo -n AP > /var/tmp/wifi-mode
+        fi
+    else
+        CURRENT_WIFI_MODE=$WIFI_MODE
+    fi
+
+    if [ -z "$WIFI_IPADDR" ]; then
+        WIFI_IPADDR="192.168.11.1"
+        WIFI_NETMASK="255.255.255.0"
+    fi
+
+    ifconfig wlan0 down 2>/dev/null
+    ifconfig wlan0 $WIFI_IPADDR netmask $WIFI_NETMASK up 2>/dev/null 1>/dev/null
+
+    if [ "$CURRENT_WIFI_MODE" = "CLIENT" ]; then
+        [ -e /var/run/wpa_supplicant.pid ] && kill $(cat /var/run/wpa_supplicant.pid)
+        [ -e /var/run/dhclient.pid ] && kill $(cat /var/run/dhclient.pid)
+        [ -e /var/run/hostapd.pid ] && kill $(cat /var/run/hostapd.pid)
+
+        WPA_SUPPLICANT_CONF=/var/etc/wpa_supplicant.conf
+
+        echo -n "" > $WPA_SUPPLICANT_CONF
+        echo "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=root" >> $WPA_SUPPLICANT_CONF
+        echo "update_config=1" >> $WPA_SUPPLICANT_CONF
+        echo "fast_reauth=1" >> $WPA_SUPPLICANT_CONF
+        echo "ap_scan=1" >> $WPA_SUPPLICANT_CONF
+        echo "network={" >> $WPA_SUPPLICANT_CONF
+        echo "    ssid=\"$WIFI_CLIENT_SSID\"" >> $WPA_SUPPLICANT_CONF
+        echo "    psk=\"$WIFI_CLIENT_PASS\"" >> $WPA_SUPPLICANT_CONF
+        echo "}" >> $WPA_SUPPLICANT_CONF
+
+        /etc/init.d/ppp stop # should be stopped before dhclient starts, otherwise resolv.conf will be empty
+        /usr/bin/modem off
+
+        /etc/init.d/dhcp-config start
+        /etc/init.d/dhcp-server restart
+        ifconfig wlan0 up
+        wpa_supplicant -B -i wlan0 -c $WPA_SUPPLICANT_CONF -D wext -P/var/run/wpa_supplicant.pid
+        [ ! -d /var/db ] && mkdir /var/db
+        dhclient -v wlan0 -sf /usr/sbin/dhclient-script
+        echo -n CLIENT > /var/tmp/wifi-mode
+
+        echo "Wi-Fi Client: $WIFI_CLIENT_SSID"
+
+    fi
+
+    if [ "$CURRENT_WIFI_MODE" = "AP" ]; then
+        [ -e /var/run/wpa_supplicant.pid ] && kill $(cat /var/run/wpa_supplicant.pid)
+        [ -e /var/run/dhclient.pid ] && kill $(cat /var/run/dhclient.pid)
+        [ -e /var/run/hostapd.pid ] && kill $(cat /var/run/hostapd.pid)
+
+        HOSTAPD_CONF=/var/etc/hostapd.conf
+
+        echo -n "" > $HOSTAPD_CONF
+        echo "driver=rtl871xdrv" >> $HOSTAPD_CONF
+        echo "ieee80211n=1" >> $HOSTAPD_CONF
+        echo "hw_mode=g" >> $HOSTAPD_CONF
+        echo "interface=wlan0" >> $HOSTAPD_CONF
+        echo "logger_syslog=-1" >> $HOSTAPD_CONF
+        echo "logger_syslog_level=2" >> $HOSTAPD_CONF
+        echo "logger_stdout=-1" >> $HOSTAPD_CONF
+        echo "logger_stdout_level=2" >> $HOSTAPD_CONF
+        echo "ctrl_interface=/var/run/hostapd" >> $HOSTAPD_CONF
+        echo "ctrl_interface_group=0" >> $HOSTAPD_CONF
+        echo "ssid=$WIFI_AP_SSID" >> $HOSTAPD_CONF
+        echo "channel=6" >> $HOSTAPD_CONF
+        echo "wpa=2" >> $HOSTAPD_CONF
+        echo "wpa_passphrase=$WIFI_AP_PASS" >> $HOSTAPD_CONF
+        echo "wpa_key_mgmt=WPA-PSK" >> $HOSTAPD_CONF
+        echo "wpa_pairwise=TKIP" >> $HOSTAPD_CONF
+        echo "rsn_pairwise=CCMP" >> $HOSTAPD_CONF
+        echo "auth_algs=1" >> $HOSTAPD_CONF
+
+        /etc/init.d/dhcp-config start
+        /etc/init.d/dhcp-server restart
+
+        /usr/bin/modem on
+        /etc/init.d/ppp start
+
+        hostapd -dd -B -P/var/run/hostapd.pid $HOSTAPD_CONF
+
+        echo -n AP > /var/tmp/wifi-mode
+
+        echo "Wi-Fi AP: $WIFI_AP_SSID"
+      
+    fi
+fi
+
+/etc/init.d/dnsmasq start
 /etc/init.d/iptables start
 /etc/init.d/pfwd start
 /etc/init.d/fw start
@@ -66,10 +169,21 @@ netservices start
     
 stop() {
     echo -n "Stopping network..."
+    /etc/init.d/fw stop
+    /etc/init.d/pfwd stop
+    /etc/init.d/iptables stop
+    /etc/init.d/dnsmasq stop
     killall reserve 2>/dev/null
     /etc/init.d/reserve stop
     ifconfig eth0 down 2>/dev/null
     ifconfig eth0:0 down 2>/dev/null
+    if [ ! -z "$WIFI_MODE" ] &&  [ "$WIFI_MODE" != "DISABLED" ]; then
+        ifconfig wlan0 down 2>/dev/null
+        [ -e /var/run/wpa_supplicant.pid ] && kill $(cat /var/run/wpa_supplicant.pid)
+        [ -e /var/run/dhclient.pid ] && kill $(cat /var/run/dhclient.pid)
+        [ -e /var/run/hostapd.pid ] && kill $(cat /var/run/hostapd.pid)
+        [ -e /var/tmp/wifi-mode ] && rm /var/tmp/wifi-mode
+    fi
 }
 
 restart() {

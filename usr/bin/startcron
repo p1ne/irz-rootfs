@@ -43,6 +43,12 @@ if [ "$PING" = "1" ] && [ -n "$PING_IPADDR" ]; then
     fi
 fi
 
+## check wlan client connection
+[ -e /mnt/rwfs/settings/settings.wifi ] && . /mnt/rwfs/settings/settings.wifi
+if [ ! -z "$WIFI_MODE" ] && [ "$WIFI_MODE" = "AUTO" ]; then
+    echo "*  *    *    *    *    /usr/bin/wlan_watch" >> $CT
+fi
+
 ## check openvpn connection
 [ -e /mnt/rwfs/settings/settings.openvpn ] && . /mnt/rwfs/settings/settings.openvpn
 if [ "$OPENVPN_ENABLED" = "1" ] && [ -n "$OPENVPN_PING2_IP" ] && [ -n "$OPENVPN_PING2_INT" ]; then

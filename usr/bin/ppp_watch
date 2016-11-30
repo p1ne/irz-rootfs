@@ -3,7 +3,24 @@
 [ -n "`pidof rcS`" ] && logger -t ppp_watch "rcS is running, not starting!" && exit 1
 
 [ -e /mnt/rwfs/settings/settings.eth ] && . /mnt/rwfs/settings/settings.eth
+[ -e /mnt/rwfs/settings/settings.wifi ] && . /mnt/rwfs/settings/settings.wifi
 [ -e /mnt/rwfs/settings/settings.ppp ] && . /mnt/rwfs/settings/settings.ppp
+
+if [ ! -z "$WIFI_MODE" ] && [ "$WIFI_MODE" = "AUTO" ]; then
+    if [ -f /var/tmp/wifi-mode ]; then
+        CURRENT_WIFI_MODE=$(cat /var/tmp/wifi-mode)
+    else
+        CURRENT_WIFI_MODE=AP
+        echo -n AP > /var/tmp/wifi-mode
+    fi
+else
+    CURRENT_WIFI_MODE=$WIFI_MODE
+fi
+
+if [ ! -z "$CURRENT_WIFI_MODE" ] && [ "$CURRENT_WIFI_MODE" = "CLIENT" ]; then
+    echo "Uplink is on wlan0"
+    exit 0
+fi
 
 if [ "$PPP_ENABLED" = "1" ]; then
     ## Check for talk

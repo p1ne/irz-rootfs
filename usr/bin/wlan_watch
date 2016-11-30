@@ -1,0 +1,28 @@
+#!/bin/sh
+
+[ -e /var/run/wlan_watch ] && exit 0
+touch /var/run/wlan_watch
+
+[ -e /mnt/rwfs/settings/settings.wifi ] && . /mnt/rwfs/settings/settings.wifi
+
+if [ -z "$WIFI_MODE" ] || [ "$WIFI_MODE" != "AUTO" ]; then
+	exit 0
+fi
+
+if [ -f /var/tmp/wifi-mode ]; then
+    CURRENT_WIFI_MODE=$(cat /var/tmp/wifi-mode)
+else
+	exit 0
+fi
+
+CHECK=$(iwlist wlan0 scanning | grep -e $WIFI_CLIENT_SSID -e $WIFI_CLIENT_BSSID | grep -e Address -e ESSID | wc -l)
+
+if [ "$CHECK" = "2" ] && [ "$CURRENT_WIFI_MODE" = "AP" ]; then
+	echo -n CLIENT > /var/tmp/wifi-mode
+	/etc/init.d/network restart
+elif [ "$CHECK" != "2" ] && [ "$CURRENT_WIFI_MODE" = "CLIENT" ]; then
+	echo -n AP > /var/tmp/wifi-mode
+	/etc/init.d/network restart
+fi
+
+rm /var/run/wlan_watch

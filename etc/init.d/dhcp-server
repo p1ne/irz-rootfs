@@ -4,7 +4,37 @@
 #
 # On what interfaces should the DHCP server (dhcpd) serve DHCP requests?
 #       Separate multiple interfaces with spaces, e.g. "eth0 eth1".
-INTERFACES="eth0"
+
+[ -e /mnt/rwfs/settings/settings.eth ] && . /mnt/rwfs/settings/settings.eth
+[ -e /mnt/rwfs/settings/settings.wifi ] && . /mnt/rwfs/settings/settings.wifi
+
+INTERFACES=""
+
+if [ ! -z "$WIFI_MODE" ] && [ "$WIFI_MODE" = "AUTO" ]; then
+    if [ -f /var/tmp/wifi-mode ]; then
+        CURRENT_WIFI_MODE=$(cat /var/tmp/wifi-mode)
+    else
+        CURRENT_WIFI_MODE=AP
+        echo -n AP > /var/tmp/wifi-mode
+    fi
+else
+    CURRENT_WIFI_MODE=$WIFI_MODE
+fi
+
+if [ "$ETH_DHCP_ENABLED" = "0" ] && [ "$WIFI_DHCP_ENABLED" = "0"]; then
+    echo "Skipped"
+    exit 0
+fi
+
+if [ "$ETH_DHCP_ENABLED" = "1" ]; then
+    INTERFACES=$INTERFACES" eth0"
+fi
+
+if [ "$WIFI_DHCP_ENABLED" = "1" ] && [ "$CURRENT_WIFI_MODE" = "AP" ]; then
+    INTERFACES=$INTERFACES" wlan0"
+fi
+
+INTERFACES=$(echo $INTERFACES | awk '{$1=$1};1') # trim leading and trailing spaces
 
 test -x /usr/sbin/dhcpd || exit 0
 case "$1" in

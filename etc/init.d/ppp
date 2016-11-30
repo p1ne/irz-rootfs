@@ -87,7 +87,18 @@ start() {
         exit 0
     fi
 
-    if [ "$WIFI_MODE" == "CLIENT" ]; then
+    if [ ! -z "$WIFI_MODE" ] && [ "$WIFI_MODE" = "AUTO" ]; then
+        if [ -f /var/tmp/wifi-mode ]; then
+            CURRENT_WIFI_MODE=$(cat /var/tmp/wifi-mode)
+        else
+            CURRENT_WIFI_MODE=AP
+            echo -n AP > /var/tmp/wifi-mode
+        fi
+    else
+        CURRENT_WIFI_MODE=$WIFI_MODE
+    fi
+
+    if [ "$CURRENT_WIFI_MODE" == "CLIENT" ]; then
         echo "wlan0 used as uplink"
         exit 0
     fi
@@ -210,7 +221,7 @@ start() {
         fi
     ## Get sim number and stats
     opinfo
-    if [ "$PPP_ENABLED" = "1" ] && [ "$WIFI_MODE" != "CLIENT" ]; then
+    if [ "$PPP_ENABLED" = "1" ] && [ "$CURRENT_WIFI_MODE" != "CLIENT" ]; then
         ## rewrite crontab due to ping
         /etc/init.d/cron restart 2>/dev/null 1>/dev/null
 

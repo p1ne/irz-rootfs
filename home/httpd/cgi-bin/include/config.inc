@@ -2,6 +2,7 @@
     <tr><td nowrap class="title"><b>Configuration</b></td></tr>
     <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="config_ppp.cgi">Internet</a></td></tr>
     <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="config_eth.cgi">LAN</a></td></tr>
+    <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="config_wifi.cgi">WiFi</a></td></tr>
     <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="config_nat.cgi">Port forwarding</a></td></tr>
     <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="config_static.cgi">Static routes</a></td></tr>
     <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="config_vrrp.cgi">VRRP</a></td></tr>
