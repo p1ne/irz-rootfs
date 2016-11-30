@@ -1,5 +1,6 @@
 #!/bin/sh
 [ -e /mnt/rwfs/settings/settings.ppp ] && . /mnt/rwfs/settings/settings.ppp
+[ -e /mnt/rwfs/settings/settings.wifi ] && . /mnt/rwfs/settings/settings.wifi
 . /etc/version
 PID=/var/run/ppp.pid
 IPPID=/var/run/ppp_ip.pid
@@ -80,6 +81,17 @@ config_huawei() {
 
 start() {
     echo -n "Starting pppd: "
+
+    if [ "$PPP_ENABLED" = "0" ]; then
+        echo "disabled"
+        exit 0
+    fi
+
+    if [ "$WIFI_MODE" == "CLIENT" ]; then
+        echo "wlan0 used as uplink"
+        exit 0
+    fi
+
     ## Check if pppd is already running
     if [ -n "`ps www|grep 'pppd call internet'|grep -v grep`" ]; then
         echo "pppd already running"
@@ -198,7 +210,7 @@ start() {
         fi
     ## Get sim number and stats
     opinfo
-    if [ "$PPP_ENABLED" = "1" ]; then
+    if [ "$PPP_ENABLED" = "1" ] && [ "$WIFI_MODE" != "CLIENT" ]; then
         ## rewrite crontab due to ping
         /etc/init.d/cron restart 2>/dev/null 1>/dev/null
 
