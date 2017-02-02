@@ -329,7 +329,7 @@ stop() {
             while true; do
                 sleep 1
                 n=$(( n + 1 ))
-                [ -z `ps www|grep 'pppd call internet'|grep -v grep` ] && break
+                [ -z "`ps www|grep 'pppd call internet'|grep -v grep`" ] && break
                 if [ "$n" = "30" ]; then
                     killall -9 pppd
                     RETVAL=$?
