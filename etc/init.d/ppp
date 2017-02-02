@@ -135,7 +135,7 @@ start() {
     ## we do this to get proper startup even if ppp is disabled
     ## select sim
     sim_switch
-    sleep 10
+    # sleep 10
     simnum=`sim get`
     ## create new pppd config
     if [ "$simnum" = "1" ]; then
