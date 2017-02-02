@@ -3,12 +3,12 @@
 simnum=`sim get`
 [ -z "$PPP_MAXFAIL" ] && PPP_MAXFAIL=3
 
-p=`ps |grep -v grep|grep gsminfod`
+#p=`ps |grep -v grep|grep gsminfod`
 
-if [ -n "$p" ]; then
-    modem off
-    sleep 3
-fi
+#if [ -n "$p" ]; then
+modem off
+sleep 3
+#fi
 
 ## if switch disabled - set primary sim
 if [ "$PPP_SWITCH" != "1" ]; then
