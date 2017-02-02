@@ -2,6 +2,7 @@
 [ -e /mnt/rwfs/settings/settings.ppp ] && . /mnt/rwfs/settings/settings.ppp
 if [ -f /var/run/ppp0.pid ]; then
     p=`cat /var/run/ppp0.pid`
+    [ -z "$p" ] && logger -t sim_check "Stale ppp0.pid file" && exit 1
     p=`ps |grep -v grep|grep $p`
     [ -n "$p" ] && logger -t sim_check "Pppd is running!" && exit 1
 fi
