@@ -146,7 +146,6 @@ if [ ! -z "$WIFI_MODE" ] && [ "$WIFI_MODE" != "DISABLED" ] ; then
         /etc/init.d/dhcp-config start
         /etc/init.d/dhcp-server restart
 
-        /usr/bin/modem on
         /etc/init.d/ppp start
 
         hostapd -B -P/var/run/hostapd.pid $HOSTAPD_CONF
