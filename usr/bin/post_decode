@@ -1,7 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/micropython
 # -*- coding: utf8 -*-
 
-import urllib, sys
+import urllib.parse, sys
 
 if len(sys.argv) > 1:
-    sys.stdout.write(urllib.unquote_plus(sys.argv[1]).replace('\r\n', '\n'))
+    sys.stdout.write(urllib.parse.unquote_plus(sys.argv[1]).replace('\r\n', '\n'))

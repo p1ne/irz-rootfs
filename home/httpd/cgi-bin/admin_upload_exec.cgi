@@ -1,7 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/micropython
 # -*- coding: utf8 -*-
 
-import cgi, os, time
+import cgi, uos, utime
 
 DIR = '/mnt/rwfs/upload/'
 
@@ -24,15 +24,15 @@ else:
 	if free > len(f):
 		try:
 			if '\0' in f:
-				print open(DIR + fn + ext, 'wb').write(f)
+				print(open(DIR + fn + ext, 'wb').write(f))
 			else:
-				print open(DIR + fn + ext, 'w').write(f.replace('\r\n', '\n'))
+				print(open(DIR + fn + ext, 'w').write(f.replace('\r\n', '\n')))
 		except Exception as err:
 			message = 'ERR: %s' % err
 	else:
 		message = "Not enough space!"
 
-print """\
+print("""\
 Content-Type: text/html\n
 <html><body>
 Please wait...<hr>
@@ -40,4 +40,4 @@ Please wait...<hr>
 <meta http-equiv="refresh" content="20;url=admin_upload.cgi"/>
 <hr><a href="admin_upload.cgi">Return</a>
 </body></html>
-""" % message
+""" % message)

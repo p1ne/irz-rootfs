@@ -7,7 +7,7 @@ TIME=`echo $TIME | sed -e 's/-/:/g'`
 echo "</td><td colspan=\"3\" valign=\"top\">"
 cat include/js.inc
 
-[ -x `which python` ] && PYTHON_VERSION="<tr><td>Python version:</td><td>`python -V 2>&1`</td></tr>"
+[ -x `which micropython` ] && PYTHON_VERSION="<tr><td>MicroPython version:</td><td>`./ver.py 2>&1`</td></tr>"
 cat << EOF
       function CheckForm() {
 	if (GetValue(document.input.firmware).length == 0) {

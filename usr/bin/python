@@ -1,2 +1,1 @@
-#!/bin/sh
-exec /usr/bin/env PYTHONHOME="/usr/" python2.7 -OO $* 
+micropython
