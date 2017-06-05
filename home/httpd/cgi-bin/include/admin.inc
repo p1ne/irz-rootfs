@@ -9,6 +9,7 @@
 	<tr><td nowrap class="menu">&nbsp;&nbsp;<a href="admin_pingtest.cgi">Ping test</a></td></tr>
     <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="admin_syslog.cgi">System log</a></td></tr>
     <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="admin_startup.cgi">Startup script</a></td></tr>
+    <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="admin_shutdown.cgi">Shutdown script</a></td></tr>
     <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="admin_ipup.cgi">IP-Up script</a></td></tr>
     <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="admin_ipdown.cgi">IP-Down script</a></td></tr>
     <tr><td nowrap class="menu">&nbsp;&nbsp;<a href="admin_usercron.cgi">User crontab</a></td></tr>

@@ -3,13 +3,8 @@
 simnum=`sim get`
 [ -z "$PPP_MAXFAIL" ] && PPP_MAXFAIL=3
 
-#p=`ps |grep -v grep|grep gsminfod`
-
-#if [ -n "$p" ]; then
-modem off
+modem off 
 sleep 3
-#fi
-
 ## if switch disabled - set primary sim
 if [ "$PPP_SWITCH" != "1" ]; then
     [ -z "$PPP_SIMCARD" ] && PPP_SIMCARD=1
@@ -17,7 +12,7 @@ if [ "$PPP_SWITCH" != "1" ]; then
     sim set $PPP_SIMCARD
     logger -t sim_switch -p daemon.info "Default SIM card $PPP_SIMCARD selected"
     modem on
-#    sleep 10
+    sleep 10
     exit 0
 fi
 

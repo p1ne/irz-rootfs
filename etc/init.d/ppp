@@ -135,7 +135,7 @@ start() {
     ## we do this to get proper startup even if ppp is disabled
     ## select sim
     sim_switch
-    # sleep 10
+    #sleep 10
     simnum=`sim get`
     ## create new pppd config
     if [ "$simnum" = "1" ]; then
@@ -185,6 +185,17 @@ start() {
                 modem="wetelecom"
                 DEV="/dev/`ls -1d /sys/bus/usb/devices/1-1/1-1\:1.0/tty* |sed -e 's/^.*tty/tty/'`"
                 ;;
+            12d1)
+                modem="huawei"
+                case "$P" in
+                    1573|1c25)
+                        DEV="/dev/`ls -1d /sys/bus/usb/devices/1-1/1-1\:2.2/tty* |sed -e 's/^.*tty/tty/'`"
+                        ;;
+                    *)
+                        DEV="/dev/`ls -1d /sys/bus/usb/devices/1-1/1-1\:1.0/tty* |sed -e 's/^.*tty/tty/'`"
+                        ;;
+                esac
+                ;;
             *)
                 modem="huawei"
                 DEV="/dev/`ls -1d /sys/bus/usb/devices/1-1/1-1\:1.0/tty* |sed -e 's/^.*tty/tty/'`"
@@ -193,11 +204,11 @@ start() {
         if [ -e "$DEV" ]; then
             logger -t ppp -p daemon.info "Device: $modem $DEV ($V:$P)"
         else
-            logger -t ppp -p daemon.info "Cannot detect tty number!"
+            logger -t ppp -p daemon.info "Cannot detect tty number! ($V:$P)"
             _exit 1
         fi
     else
-        logger -t ppp -p daemon.info "Cannot detect modem!"
+        logger -t ppp -p daemon.info "Cannot detect modem! ($V:$P)"
         _exit 1
     fi
     ## Configure modem
@@ -329,7 +340,7 @@ stop() {
             while true; do
                 sleep 1
                 n=$(( n + 1 ))
-                [ -z "`ps www|grep 'pppd call internet'|grep -v grep`" ] && break
+                [ -z `ps www|grep 'pppd call internet'|grep -v grep` ] && break
                 if [ "$n" = "30" ]; then
                     killall -9 pppd
                     RETVAL=$?

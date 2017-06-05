@@ -32,7 +32,8 @@ netservices stop 1>/dev/null 2>/dev/null
 
 ## Primary IP
 ifconfig eth0 down 2>/dev/null
-ifconfig eth0 $ETH_IPADDR netmask $ETH_NETMASK hw ether $ETH_MAC up 2>/dev/null 1>/dev/null
+ifconfig eth0 hw ether $ETH_MAC 2>/dev/null 1>/dev/null
+ifconfig eth0 $ETH_IPADDR netmask $ETH_NETMASK up 2>/dev/null 1>/dev/null
 echo "Network: $ETH_IPADDR/$ETH_NETMASK/$ETH_MAC"
 
 ## Secondary IP

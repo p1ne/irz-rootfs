@@ -1,6 +1,6 @@
 #!/bin/sh
 ## Prevent reboot by our scripts
-touch /tmp/noreboot
+echo "Firmware upgrade started @ `date`" > /tmp/noreboot
 ## We do not clean this flag since if someone has started firmware upgrade
 ## then he should also take care about missing SIM cards in case of unsuccessful
 ## upgrade or flag will be cleared by reboot
@@ -173,7 +173,9 @@ if [ "$res" = "0" ]; then
     NVLOG=/mnt/rwfs/settings/connection.log
     echo "`$BB date +'%F %H:%M:%S'` Firmware update reboot" >> $NVLOG
     $BB killall watchdog ## reboot after 1 minute if reboot cmd fails
-    $BB nohup $BB reboot -f -d 5 2>>$NVLOG 1>>$NVLOG &
+    $BB killall syslogd ; $BB sleep 1 ; $BB killall -9 syslogd
+    $BB umount -a -r
+    $BB nohup $BB reboot -d 5 2>>$NVLOG 1>>$NVLOG &
 else
     ## Cleanup
     rm -rf $updatedir
